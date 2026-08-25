@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1784860779448,
+      "tag": "0000_slow_thena",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784867593572,
+      "tag": "0001_sloppy_zuras",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784905524171,
+      "tag": "0002_glamorous_purple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785708000000,
+      "tag": "0003_lastlink_revenue_bases",
+      "breakpoints": true
+    }
+  ]
+}

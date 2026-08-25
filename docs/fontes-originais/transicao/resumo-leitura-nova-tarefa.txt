@@ -1,0 +1,99 @@
+Li integralmente o AGENTS.md, o README.md e os 16 documentos encontrados em docs. Nenhum arquivo foi alterado.
+Contexto recuperado
+O Funil Metrics está em fase de descoberta, definição de produto e arquitetura. A proposta é criar uma plataforma própria de inteligência de marketing e vendas para infoprodutos, consolidando anúncios, navegação, leads, mensagens, webinars, pedidos e pagamentos.
+O diferencial central é acompanhar uma pessoa ao longo de uma jornada única e permanente, mesmo quando ela atravessa múltiplos funis, campanhas, lançamentos, webinars e produtos. Pessoa, jornada, funil, campanha, anúncio, criativo, pedido e pagamento são entidades distintas.
+Exemplo conceitual:
+Criativo no Meta Ads
+→ lead
+→ compra de low ticket
+→ mensagens no Sendflow
+→ webinar
+→ compra de outro produto
+→ mentoria
+A origem inicial deve continuar preservada, enquanto cada compra pode ter atribuição direta e influências intermediárias próprias. O sistema também deve medir ascensão e LTV acumulado.
+Princípios obrigatórios
+Preservar o payload bruto e todo o histórico recebido.
+Nunca corrigir ou reescrever silenciosamente o dado original.
+Tornar normalizações, correções, fusões e ações auditáveis e, quando aplicável, reversíveis.
+Processar webhooks e sincronizações com idempotência.
+Não dividir artificialmente leads e clientes: são estados da mesma pessoa.
+Guardar todos os touchpoints e recalcular modelos de atribuição sem reimportar dados.
+Separar conversões diretas das assistidas.
+Não apagar compras por causa de reembolsos ou chargebacks; eles reduzem a receita líquida.
+Preservar as UTMs da Lastlink tanto no dado bruto quanto no normalizado.
+Não introduzir Rebrandly.
+Diferenciar zero real, dado ausente e dado ainda não processado.
+Exibir métricas com período, fuso, moeda, filtros, fonte e versão da regra.
+Incluir em toda funcionalidade estados de carregamento, vazio, erro, falta de permissão, integração atrasada e dado parcial.
+Fontes e integrações iniciais
+Lastlink: compradores, pedidos, produtos, pagamentos, reembolsos, assinaturas e UTMs.
+Meta Ads: contas, campanhas, conjuntos, anúncios, criativos e métricas; inicialmente somente leitura e arquivamento.
+Sendflow: mensagens, entregas, cliques, respostas e contatos.
+Hotwebinar: inscrições, presença, duração, sessões e interações.
+Datacrazy: escopo ainda precisa ser validado.
+Formulários próprios: leads, pesquisa de persona e comportamento.
+Cada integração deverá documentar autenticação, webhooks, sincronização histórica e incremental, IDs externos, payloads reais, idempotência, limites, retentativas, reconciliação e saúde.
+Arquitetura proposta
+TypeScript em toda a aplicação.
+Next.js e React no frontend.
+Backend TypeScript modular.
+PostgreSQL gerenciado pelo Supabase.
+Drizzle ORM e migrações versionadas.
+Railway inicialmente.
+Workers e filas para ingestão e tarefas demoradas.
+Monorepo dividido entre aplicações e pacotes de domínio.
+O fluxo previsto é:
+Fontes externas
+→ webhooks/sincronizadores
+→ fila idempotente
+→ armazenamento bruto
+→ normalização
+→ resolução de identidade
+→ domínio e métricas versionadas
+→ dashboards, relatórios e IA
+→ futuras ações com aprovação
+A IA deverá consultar uma camada de métricas governada, não executar SQL irrestrito. Alterações externas exigirão permissões, limites, aprovação e auditoria.
+Modelo conceitual
+Os principais grupos de dados são:
+Organizações, projetos, usuários, papéis e auditoria.
+Pessoas, identidades, evidências, fusões e sessões.
+Campanhas, anúncios, criativos e touchpoints UTM.
+Funis, versões, etapas, lançamentos e webinars.
+Produtos, ofertas, pedidos, itens, transações e eventos financeiros.
+Eventos brutos, eventos normalizados e seus vínculos.
+Conversões, modelos, execuções e créditos de atribuição.
+Domínios, links inteligentes, variantes e exposições.
+Lead scoring, pesquisas, segmentos e persona.
+Conexões, jobs, checkpoints, falhas e qualidade dos dados.
+Conversas de IA, recomendações, aprovações e execuções.
+Os créditos de atribuição são resultados recalculáveis; nunca substituem os eventos históricos.
+Métricas
+O documento define aquisição, conversão, receita, LTV, ascensão, atribuição, criativos e qualidade dos dados.
+Pontos importantes:
+Receita bruta e líquida são distintas.
+O marco do LTV precisa ser informado.
+Denominadores devem ser visíveis e deduplicados conforme o objetivo.
+A soma dos créditos de atribuição não pode exceder a receita elegível.
+“Criativo vencedor” exige objetivo, volume, janela, métrica e guardrails.
+Fadiga será uma classificação composta e versionada.
+Ainda estão pendentes janelas-padrão, filtros de bots, tratamento de impostos/taxas/comissões e volumes mínimos.
+Experimentação
+O MVP de testes A/B será baseado em links inteligentes:
+Split ponderado.
+Variante persistente por visitante.
+Preservação de UTMs e click IDs.
+Domínios personalizados.
+Registro de designação e exposição.
+Associação de leads, compras, receita, reembolso, ascensão e LTV.
+Sem vencedor automático sem amostra e regra estatística aprovadas.
+Estado do roadmap
+A documentação inicial está concluída. Antes da implementação principal, ainda é necessário:
+Validar payloads reais e anonimizados da Lastlink.
+Mapear APIs, permissões e webhooks das demais fontes.
+Aprovar regras de identidade e janelas de atribuição.
+Criar wireframes e escolher a direção visual.
+Converter o modelo conceitual em schema físico.
+Montar repositório, ambientes e controles de qualidade.
+O MVP prioriza ingestão confiável, Lastlink, Meta Ads em leitura, identidade, pedidos e pagamentos, touchpoints, jornada individual, ascensão, dashboards básicos e saúde das integrações.
+Regras que seguirei daqui em diante
+Antes de qualquer mudança, consultarei o documento específico da área afetada. Não inventarei regras ausentes: pressupostos serão explicitados, decisões arquiteturais relevantes irão para docs/DECISOES.md e eventos novos para docs/EVENTOS_E_TRACKING.md. A fonte da verdade será formada por eventos normalizados, identidade e regras versionadas — não por dashboards isolados.

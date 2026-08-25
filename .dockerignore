@@ -1,0 +1,17 @@
+.git
+.tmp
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+dist
+**/dist
+.next
+**/.next
+coverage
+docs
+outputs
+supabase
+work
+*.log

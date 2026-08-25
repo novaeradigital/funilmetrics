@@ -1,0 +1,121 @@
+{
+  "Id": "00000000-0000-4000-8000-000000000007",
+  "IsTest": true,
+  "Event": "Purchase_Request_Expired",
+  "CreatedAt": "2026-07-24T00:36:25",
+  "Data": {
+    "Products": [
+      {
+        "Id": "10000000-0000-4000-8000-000000000001",
+        "Name": "[PRODUTO_REMOVIDO]"
+      }
+    ],
+    "Buyer": {
+      "Id": "30000000-0000-4000-8000-000000000006",
+      "Email": "[EMAIL_REMOVIDO]",
+      "Name": "[NOME_REMOVIDO]",
+      "PhoneNumber": "[TELEFONE_REMOVIDO]",
+      "Document": "[DOCUMENTO_REMOVIDO]",
+      "Address": {
+        "ZipCode": "[CEP_REMOVIDO]",
+        "Street": "[RUA_REMOVIDA]",
+        "StreetNumber": "[NUMERO_REMOVIDO]",
+        "Complement": "[COMPLEMENTO_REMOVIDO]",
+        "District": "[BAIRRO_REMOVIDO]",
+        "City": "[CIDADE_REMOVIDA]",
+        "State": "[ESTADO_REMOVIDO]"
+      }
+    },
+    "Seller": {
+      "Id": "40000000-0000-4000-8000-000000000001",
+      "Email": "[EMAIL_REMOVIDO]"
+    },
+    "Commissions": [
+      {
+        "Value": 0.99,
+        "Source": "MARKETPLACE"
+      },
+      {
+        "Value": 15.25,
+        "Source": "PRODUCER"
+      },
+      {
+        "Value": 10.5,
+        "Source": "COPRODUCER",
+        "Details": [
+          {
+            "ReceiverId": "50000000-0000-4000-8000-000000000011",
+            "Amount": 7.5,
+            "ReceiverEmail": "[EMAIL_REMOVIDO]"
+          },
+          {
+            "ReceiverId": "50000000-0000-4000-8000-000000000012",
+            "Amount": 7.75,
+            "ReceiverEmail": "[EMAIL_REMOVIDO]"
+          }
+        ]
+      },
+      {
+        "Value": 5.25,
+        "Source": "AFFILIATE"
+      }
+    ],
+    "Purchase": {
+      "Recurrency": 1,
+      "OriginalPrice": {
+        "Value": 12.5
+      },
+      "Price": {
+        "Value": 12.5
+      },
+      "Payment": {
+        "NumberOfInstallments": 1,
+        "PaymentMethod": "bankslip"
+      },
+      "Affiliate": {
+        "Id": "60000000-0000-4000-8000-000000000006",
+        "Email": "[EMAIL_REMOVIDO]"
+      },
+      "BankSlip": {
+        "DigitableLine": "[LINHA_DIGITAVEL_REMOVIDA]",
+        "BarCodeData": "[CODIGO_BARRAS_REMOVIDO]",
+        "BarCode": "[URL_CODIGO_BARRAS_REMOVIDA]"
+      },
+      "InvoiceUrl": "https://example.invalid/fatura",
+      "OriginUrl": "https://example.invalid/checkout?utm_source=abcd&utm_medium=efgh&src=blog&sck=form_button&vtid=00001-000002-000102",
+      "IsUpsell": true,
+      "IsSmartInstallment": true,
+      "SmartInstallment": {
+        "CurrentInstallment": 1,
+        "TotalInstallments": 6,
+        "Type": "recovery"
+      }
+    },
+    "Subscriptions": [
+      {
+        "Id": "70000000-0000-4000-8000-000000000006",
+        "ProductId": "10000000-0000-4000-8000-000000000001",
+        "ExpiredDate": "2026-07-24T00:36:25.0782176Z"
+      }
+    ],
+    "Offer": {
+      "Id": "20000000-0000-4000-8000-000000000001",
+      "Name": "[OFERTA_REMOVIDA]",
+      "Url": "https://example.invalid/oferta"
+    },
+    "Utm": {
+      "UtmSource": "utm_source",
+      "UtmMedium": "utm_medium",
+      "UtmCampaign": "utm_campaign",
+      "UtmTerm": "utm_term",
+      "UtmContent": "utm_content",
+      "Src": "blog",
+      "Sck": "form_button",
+      "Vtid": "00001-000002-000102"
+    },
+    "DeviceInfo": {
+      "UserAgent": "[USER_AGENT_REMOVIDO]",
+      "ip": "[IP_REMOVIDO]"
+    }
+  }
+}

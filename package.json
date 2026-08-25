@@ -1,0 +1,42 @@
+{
+  "name": "funil-metrics",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @funil-metrics/web",
+    "dev:web": "npm run dev --workspace @funil-metrics/web",
+    "dev:api": "npm run dev --workspace @funil-metrics/api",
+    "dev:worker": "npm run dev --workspace @funil-metrics/worker",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "pretest": "npm run build --workspace @funil-metrics/domain",
+    "test": "npm run test --workspaces --if-present",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "db:generate": "npm run db:generate --workspace @funil-metrics/database",
+    "db:check": "npm run db:check --workspace @funil-metrics/database",
+    "db:verify": "node --env-file=.env.local scripts/verify-database.mjs",
+    "currency:backfill:estimate": "node --env-file=.env.local scripts/estimate-currency-backfill.mjs",
+    "meta:sync:trigger": "node --env-file=.env.local scripts/trigger-meta-sync.mjs",
+    "currency:backfill:execute": "node --env-file=.env.local scripts/execute-currency-backfill.mjs",
+    "currency:backfill:status": "node --env-file=.env.local scripts/currency-backfill-status.mjs",
+    "currency:backfill:process": "node --env-file=.env.local scripts/process-currency-backfill.mjs",
+    "currency:backfill:reconcile": "node --env-file=.env.local scripts/reconcile-currency-backfill.mjs",
+    "lastlink:provision": "node --env-file=.env.local scripts/provision-lastlink-connection.mjs",
+    "lastlink:set-token": "node --env-file=.env.local --env-file=.env.lastlink.local scripts/set-lastlink-token.mjs",
+    "lastlink:set-primary-product": "node --env-file=.env.local scripts/set-lastlink-primary-product.mjs",
+    "lastlink:normalize": "npm run build --workspace @funil-metrics/database && node --env-file=.env.local --import tsx apps/worker/src/normalize-lastlink.ts",
+    "drive:inventory:retry": "node --env-file=.env.local scripts/retry-drive-inventory.mjs",
+    "drive:folder:diagnose": "node --env-file=.env.local --import tsx scripts/diagnose-drive-folder.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "supabase": "^2.109.1"
+  }
+}

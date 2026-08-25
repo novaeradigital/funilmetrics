@@ -1,0 +1,20 @@
+name = "funil-metrics-redirect"
+main = "src/index.ts"
+compatibility_date = "2026-07-26"
+workers_dev = true
+
+[vars]
+API_BASE_URL = "https://api-production-682c.up.railway.app"
+FALLBACK_ORIGIN = "https://web-production-a818d.up.railway.app"
+CONFIG_CACHE_SECONDS = "60"
+PREVIEW_HOSTNAME = "ab.patriciapassos.com"
+
+# EDGE_SHARED_SECRET deve ser salvo com `wrangler secret put`.
+[[queues.producers]]
+binding = "EXPOSURES"
+queue = "funil-metrics-exposures"
+
+[[queues.consumers]]
+queue = "funil-metrics-exposures"
+max_batch_size = 100
+max_batch_timeout = 5

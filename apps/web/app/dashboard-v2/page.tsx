@@ -1,0 +1,68 @@
+import {redirect} from "next/navigation";
+import {getActiveProject} from "../../lib/active-project";
+import {getDatabase} from "../../lib/database";
+import {loadDashboardMetricSeries,loadDashboardMetricValues} from "../../lib/dashboard-metric-values";
+import {createClient} from "../../lib/supabase/server";
+import {DashboardV2Client} from "./dashboard-v2-client";
+import {DashboardSidebar} from "../dashboard/dashboard-sidebar";
+import {calendarDateInTimeZone,shiftCalendarDate} from "../../lib/calendar-date";
+
+type Search={from?:string;to?:string;account?:string;product?:string|string[];channel?:string;medium?:string;offer?:string;payment_method?:string;payment_status?:string;buyer?:string;compare?:string;basis?:string};
+type Option={id:string;name:string};
+type Ranked={name:string;value:number;amount?:number};
+type SavedWidget={instanceId:string;kind:string;title:string;config:Record<string,unknown>;grid_x:number;grid_y:number;grid_width:number;grid_height:number;display_order:number};
+type SavedTemplate={id:string;name:string;definition:{version?:number;source?:string;widgets?:Array<{id:string;kind:string;gridWidth:number;gridHeight:number;gridX:number;gridY:number;config?:Record<string,unknown>}>};createdAt:string};
+
+function validDate(value?:string){return value&&/^\d{4}-\d{2}-\d{2}$/.test(value)?value:null}
+function productIds(value?:string|string[]){
+ const values=(Array.isArray(value)?value:[value??""]).flatMap(item=>item.split(","));
+ return [...new Set(values.filter(item=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item)))];
+}
+
+export default async function DashboardV2Page({searchParams}:{searchParams:Promise<Search>}){
+ const query=await searchParams,supabase=await createClient(),{data}=await supabase.auth.getUser();
+ if(!data.user)redirect("/login");
+ const context=await getActiveProject(data.user.id);if(!context.project)redirect("/dashboard/projetos");
+ const project=context.project,database=getDatabase();
+ const today=calendarDateInTimeZone(new Date(),project.timezone);
+ const to=validDate(query.to)??today;
+ const from=validDate(query.from)??shiftCalendarDate(today,-29);
+ const periodDays=Math.max(1,Math.round((Date.parse(`${to}T00:00:00Z`)-Date.parse(`${from}T00:00:00Z`))/86400000)+1);
+ const previousTo=shiftCalendarDate(from,-1),previousFrom=shiftCalendarDate(from,-periodDays);
+ const revenueBasis=query.basis==="sale_total"?"sale_total" as const:"producer_commission" as const,selectedProducts=productIds(query.product);
+ const buyerSegment:"new"|"recurring"|null=query.buyer==="new"||query.buyer==="recurring"?query.buyer:null;
+ const filters={from,to,accountId:query.account??null,productIds:selectedProducts.length?selectedProducts:null,timezone:project.timezone,revenueBasis,
+  source:query.channel??null,medium:query.medium??null,offerId:query.offer??null,paymentMethod:query.payment_method??null,paymentStatus:query.payment_status??null,buyerSegment};
+ const emptyValues={gross_revenue:{value:0,available:false},net_revenue:{value:0,available:false},
+  approved_payments:{value:0,available:false},pending_payments:{value:0,available:false},reversed_payments:{value:0,available:false},
+  meta_spend:{value:0,available:false},meta_impressions:{value:0,available:false},meta_clicks:{value:0,available:false},meta_link_clicks:{value:0,available:false},
+  meta_landing_page_views:{value:0,available:false},meta_view_content:{value:0,available:false},
+  meta_add_to_cart:{value:0,available:false},meta_initiate_checkout:{value:0,available:false}};
+ const emptySeries={gross_revenue:[],net_revenue:[],approved_payments:[],reversed_payments:[],meta_spend:[],meta_impressions:[],meta_clicks:[]};
+ const previousFilters={...filters,from:previousFrom,to:previousTo};
+ const [metrics,previousMetrics,series,accounts,products,offers,media,paymentMethods,paymentStatuses,productSales,accountSpend,channels,hours,savedWidgets,savedTemplates]=await Promise.all([
+  loadDashboardMetricValues(database,project.id,30,filters).catch(()=>emptyValues),
+  loadDashboardMetricValues(database,project.id,30,previousFilters).catch(()=>emptyValues),
+  loadDashboardMetricSeries(database,project.id,30,filters).catch(()=>emptySeries),
+  database.pool.query<Option>(`select id,name from public.meta_ad_accounts where project_id=$1 order by name`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<Option>(`select id,name from public.commerce_products where project_id=$1 and data_scope='production' order by name`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<Option>(`select distinct offer.id,offer.name from public.commerce_offers offer join public.commerce_orders orders on orders.offer_id=offer.id where orders.project_id=$1 and orders.data_scope='production' order by offer.name`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{name:string}>(`select distinct coalesce(nullif(attribution.utm_medium,''),'Não informada') name from public.order_attributions attribution join public.commerce_orders orders on orders.id=attribution.order_id where orders.project_id=$1 and orders.data_scope='production' order by 1`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{name:string}>(`select distinct payment.method name from public.payments payment join public.commerce_orders orders on orders.id=payment.order_id where orders.project_id=$1 and orders.data_scope='production' and payment.method is not null order by 1`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{name:string}>(`select distinct payment.status name from public.payments payment join public.commerce_orders orders on orders.id=payment.order_id where orders.project_id=$1 and orders.data_scope='production' and payment.status is not null order by 1`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{name:string;value:number}>(`select product.name,count(distinct item.order_id)::int value from public.commerce_order_items item join public.commerce_products product on product.id=item.product_id join public.commerce_orders orders on orders.id=item.order_id where orders.project_id=$1 and orders.data_scope='production' and (orders.occurred_at at time zone $5)>=$2::date and (orders.occurred_at at time zone $5)<$3::date+interval '1 day' and ($4::uuid[] is null or product.id=any($4)) group by product.name order by value desc limit 6`,[project.id,from,to,selectedProducts.length?selectedProducts:null,project.timezone]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{name:string;value:number;amount:string}>(`select account.name,coalesce(sum(insight.spend_base),0)::float value,coalesce(sum(insight.spend_base),0)::text amount from public.meta_ad_insights_daily insight join public.meta_ad_accounts account on account.id=insight.meta_ad_account_id where insight.project_id=$1 and insight.metric_date between $2::date and $3::date and insight.conversion_status in ('converted','not_required') and ($4::uuid is null or account.id=$4) group by account.name order by value desc limit 6`,[project.id,from,to,query.account??null]).then(r=>r.rows.map(x=>({...x,amount:Number(x.amount)}))).catch(()=>[]),
+  database.pool.query<{name:string;value:number}>(`select coalesce(nullif(attribution.utm_source,''),nullif(attribution.src,''),'N\u00e3o informado') name,count(distinct attribution.order_id)::int value from public.order_attributions attribution join public.commerce_orders orders on orders.id=attribution.order_id where orders.project_id=$1 and orders.data_scope='production' and (orders.occurred_at at time zone $4)>=$2::date and (orders.occurred_at at time zone $4)<$3::date+interval '1 day' group by 1 order by value desc limit 6`,[project.id,from,to,project.timezone]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{name:string;value:number}>(`select to_char(event.occurred_at at time zone $4,'HH24') name,count(distinct event.payment_id)::int value from public.normalized_payment_events event where event.project_id=$1 and event.data_scope='production' and event.financial_effect>0 and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day' group by 1 order by 1`,[project.id,from,to,project.timezone]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<SavedWidget>(`select coalesce(widget.config->>'v2InstanceId',widget.config->>'v2Kind') "instanceId",widget.config->>'v2Kind' kind,widget.title,widget.config,widget.grid_x,widget.grid_y,widget.grid_width,widget.grid_height,widget.display_order from public.dashboards dashboard join public.dashboard_versions version on version.dashboard_id=dashboard.id and version.status='draft' join public.dashboard_widgets widget on widget.dashboard_version_id=version.id where dashboard.project_id=$1 and dashboard.status='active' and dashboard.description='[funil-metrics:dashboard-v2]' and widget.config ? 'v2Kind' order by widget.display_order`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<SavedTemplate>(`select id,name,definition,created_at::text "createdAt" from public.dashboard_templates where project_id=$1 and not is_system order by created_at desc`,[project.id]).then(r=>r.rows).catch(()=>[]),
+ ]);
+ return <main className="app-layout"><DashboardSidebar activeHref="/dashboard-v2" footerLabel="Dados conectados"/>
+  <section className="app-content"><DashboardV2Client project={{id:project.id,name:project.name,currency:project.currency,timezone:project.timezone}}
+   filters={{from,to,account:query.account??"",product:selectedProducts.join(","),channel:query.channel??"",medium:query.medium??"",offer:query.offer??"",payment_method:query.payment_method??"",payment_status:query.payment_status??"",buyer:buyerSegment??"",compare:query.compare??"previous",basis:revenueBasis}}
+   accounts={accounts} products={products} metrics={metrics} previousMetrics={previousMetrics} series={series}
+   advancedOptions={{offers,media,paymentMethods,paymentStatuses}}
+   savedWidgets={savedWidgets} savedTemplates={savedTemplates}
+   rankings={{productSales:productSales as Ranked[],accountSpend:accountSpend as Ranked[],channels:channels as Ranked[],hours:hours as Ranked[]}}/>
+  </section></main>;
+}

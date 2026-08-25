@@ -1,0 +1,34 @@
+{
+  "Id": "00000000-0000-4000-8000-000000000001",
+  "IsTest": true,
+  "Event": "Abandoned_Cart",
+  "CreatedAt": "2026-07-24T00:24:00",
+  "Data": {
+    "Products": [
+      {
+        "Id": "10000000-0000-4000-8000-000000000001",
+        "Name": "[PRODUTO_REMOVIDO]"
+      }
+    ],
+    "Buyer": {
+      "Email": "[EMAIL_REMOVIDO]",
+      "Name": "[NOME_REMOVIDO]",
+      "PhoneNumber": "[TELEFONE_REMOVIDO]"
+    },
+    "Offer": {
+      "Id": "20000000-0000-4000-8000-000000000001",
+      "Name": "[OFERTA_REMOVIDA]",
+      "Url": "https://example.invalid/oferta"
+    },
+    "Utm": {
+      "UtmSource": "utm_source",
+      "UtmMedium": "utm_medium",
+      "UtmCampaign": "utm_campaign",
+      "UtmTerm": "utm_term",
+      "UtmContent": "utm_content",
+      "Src": "blog",
+      "Sck": "form_button",
+      "Vtid": "00001-000002-000102"
+    }
+  }
+}
