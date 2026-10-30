@@ -2021,3 +2021,26 @@ O editor persiste e aplica configurações por instância, incluindo granularida
   pedido; comissão de produtor não existe nesta fonte (cobertura parcial
   na base por comissão, completa na base por valor total); baixa manual
   entra sem efeito financeiro, pela régua de id de pagamento.
+
+## D-142 — Integrações: hub de plataformas com página própria por plataforma
+
+- Contexto: a página de Integrações empilhava todos os formulários e
+  painéis de todas as plataformas numa única tela longa, o que dificultava
+  encontrar e manter cada integração.
+- Decisão: a página vira um hub de descoberta no padrão dos catálogos de
+  integrações: busca por nome, filtros por categoria e seções agrupadas
+  (Vendas, Marketing, Criativos e IA, Infraestrutura), cada plataforma com
+  card próprio (logo da marca, nome, estado da conexão e atalho).
+- Cada plataforma tem página própria sob `/dashboard/integracoes/<slug>`
+  com os seus formulários e painéis, sem mudança de comportamento: as
+  mesmas actions, os mesmos campos e o mesmo cofre. As páginas são
+  google-drive (com a política de mídia da Central de Criativos), openai
+  (credencial, precificação versionada e uso medido), meta (OAuth, usuário
+  do sistema, conexões, sincronização e catálogo), cloudflare-r2, clamav,
+  railway e cloudflare. Lastlink e ConfigCheckout já tinham página própria
+  e só ganharam o card no hub.
+- Os redirects de sucesso das actions passam a voltar para a página da
+  plataforma (mapa provider → página), e os avisos são compartilhados
+  entre hub e páginas pelo módulo `integracoes/shared.tsx`, que concentra
+  o carregamento de contexto, o casco da página e o formulário de
+  credenciais.

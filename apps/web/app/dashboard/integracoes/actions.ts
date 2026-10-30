@@ -45,6 +45,20 @@ async function requireActiveIntegrationProject(
   }
 }
 
+
+const providerPages: Record<string, string> = {
+  google_drive_app: "/dashboard/integracoes/google-drive",
+  openai: "/dashboard/integracoes/openai",
+  meta_ads: "/dashboard/integracoes/meta",
+  meta_ads_app: "/dashboard/integracoes/meta",
+  cloudflare_r2: "/dashboard/integracoes/cloudflare-r2",
+  clamav: "/dashboard/integracoes/clamav",
+  railway: "/dashboard/integracoes/railway",
+  cloudflare_account: "/dashboard/integracoes/cloudflare",
+};
+function providerPath(provider: string): string {
+  return providerPages[provider] ?? "/dashboard/integracoes";
+}
 export async function saveIntegrationConfiguration(formData: FormData) {
   const provider = field(formData, "provider", 50);
   const projectId = field(formData, "project_id", 64);
@@ -308,7 +322,7 @@ export async function saveIntegrationConfiguration(formData: FormData) {
     client.release();
   }
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes?status=saved");
+  redirect(`${providerPath(provider)}?status=saved`);
 }
 
 export async function updateOpenAiBudget(formData: FormData) {
@@ -402,7 +416,7 @@ export async function updateOpenAiBudget(formData: FormData) {
     client.release();
   }
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes?status=budget-saved");
+  redirect("/dashboard/integracoes/openai?status=budget-saved");
 }
 
 export async function saveAiPricing(formData:FormData){
@@ -465,7 +479,7 @@ export async function saveAiPricing(formData:FormData){
     redirect("/dashboard/integracoes?status=pricing-save-failed");
   }finally{client.release();}
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes?status=pricing-saved");
+  redirect("/dashboard/integracoes/openai?status=pricing-saved");
 }
 
 export async function validateIntegrationConnection(formData: FormData) {
@@ -924,10 +938,10 @@ export async function validateIntegrationConnection(formData: FormData) {
     } finally {
       failureClient.release();
     }
-    redirect(`/dashboard/integracoes?status=${provider}-test-failed`);
+    redirect(`${providerPath(provider)}?status=${provider}-test-failed`);
   }
   revalidatePath("/dashboard/integracoes");
-  redirect(`/dashboard/integracoes?status=${provider}-valid`);
+  redirect(`${providerPath(provider)}?status=${provider}-valid`);
 }
 
 export async function revokeMetaConnection(formData:FormData){
@@ -969,7 +983,7 @@ export async function revokeMetaConnection(formData:FormData){
   }catch{await client.query("rollback");redirect("/dashboard/integracoes?status=meta-revoke-failed")}
   finally{client.release()}
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes?status=meta-revoked");
+  redirect("/dashboard/integracoes/meta?status=meta-revoked");
 }
 
 export async function updateMetaSyncSchedule(formData:FormData){
@@ -1052,7 +1066,7 @@ export async function updateMetaSyncSchedule(formData:FormData){
     redirect("/dashboard/integracoes?status=meta-schedule-failed");
   }finally{client.release()}
   revalidatePath("/dashboard/integracoes");
-  redirect(`/dashboard/integracoes?status=${enabled
+  redirect(`/dashboard/integracoes/meta?status=${enabled
     ?"meta-schedule-enabled":"meta-schedule-disabled"}`);
 }
 
@@ -1094,7 +1108,7 @@ export async function correctMetaAccountCurrency(formData:FormData){
     code:error&&typeof error==="object"&&"code" in error?String(error.code):"unknown"});
     redirect("/dashboard/integracoes?status=currency-correction-failed")
   }finally{client.release()}
-  revalidatePath("/dashboard/integracoes");redirect("/dashboard/integracoes?status=currency-correction-saved");
+  revalidatePath("/dashboard/integracoes");redirect("/dashboard/integracoes/meta?status=currency-correction-saved");
 }
 
 export async function queueMetaSyncNow(formData:FormData){
@@ -1172,5 +1186,5 @@ export async function queueMetaSyncNow(formData:FormData){
     redirect("/dashboard/integracoes?status=meta-sync-failed");
   }finally{client.release()}
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes?status=meta-sync-queued");
+  redirect("/dashboard/integracoes/meta?status=meta-sync-queued");
 }
