@@ -1974,3 +1974,30 @@ O editor persiste e aplica configurações por instância, incluindo granularida
   (`defaultConfig`) passam a ser lima (principal) e cinza (secundária);
   widgets já salvos mantêm as cores que o usuário configurou. Se aprovado,
   a mesma linguagem visual será levada às demais telas do painel.
+
+## D-140 — Redesign estrutural do Meus dashboards (substitui o piloto D-139)
+
+- **Data:** 30/10/2026.
+- **Status:** implementada (v2 local), aguardando aprovação visual do Fábio.
+- **Origem:** retorno do Fábio sobre o piloto: trocar só as cores não basta;
+  o design precisa ficar de fato parecido com a referência (Sentinela):
+  tipografia, tamanhos, espaçamentos e gráfico. Cores: pode usar a paleta
+  da própria marca (verde); informação positiva em verde e negativa em
+  vermelho.
+- **Achado:** a fonte Inter estava declarada em todo o CSS, mas nunca era
+  carregada (sem next/font nem link), então o painel renderizava na fonte
+  reserva do sistema. Correção: `layout.tsx` passa a carregar a Inter
+  (Google Fonts, pesos 400 a 900), o que corrige a tipografia do app
+  inteiro conforme o design sempre pretendeu.
+- **Decisão:** redesign estrutural com escopo no Meus dashboards: cabeçalho
+  de página com nome do projeto; cards planos (#111113, raio 16px, sombra
+  suave, padding maior); KPIs com rótulo em caixa alta, valor grande (até
+  34px, peso 800, números tabulares) e a variação do período DENTRO do
+  card; gráfico financeiro em linhas com área preenchida em gradiente
+  (novo modo padrão do widget, recharts Area); grade com respiro de 16px.
+  Cor de destaque: o verde da marca (#24d689). Semântica de cor aplicada:
+  variação positiva verde e negativa vermelha; lucro verde/vermelho pelo
+  sinal; ROAS verde a partir de 1 e vermelho abaixo de 1 (card e tabela
+  por anúncio); valor revertido em vermelho na Saúde financeira. O bloco
+  de CSS do D-139 foi substituído pelo bloco D-140 em
+  `apps/web/app/dashboard-editor.css`.
