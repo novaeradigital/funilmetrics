@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "latest",
+    "@next/swc-wasm-nodejs": "^16.2.11",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",

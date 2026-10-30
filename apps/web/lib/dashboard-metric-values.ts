@@ -14,7 +14,7 @@ function commerceFilterSql(buyerSegment:DashboardQueryFilters["buyerSegment"]){r
  and ($9::text is null or coalesce((select coalesce(nullif(a.utm_source,''),nullif(a.src,'')) from public.order_attributions a where a.order_id=event.order_id order by a.created_at desc limit 1),'N\u00e3o informado')=$9)
  and ($10::text is null or coalesce((select nullif(a.utm_medium,'') from public.order_attributions a where a.order_id=event.order_id order by a.created_at desc limit 1),'N\u00e3o informada')=$10)
  and ($11::text is null or exists(select 1 from public.payments filtered_payment where filtered_payment.order_id=event.order_id and filtered_payment.method=$11))
- and ($12::text is null or exists(select 1 from public.payments filtered_payment where filtered_payment.order_id=event.order_id and filtered_payment.status=$12))
+ and ($12::text is null or exists(select 1 from public.payments filtered_payment where filtered_payment.order_id=event.order_id and filtered_payment.status::text=$12))
  and ($13::text is null or exists(select 1 from public.commerce_orders buyer_order where buyer_order.id=event.order_id and buyer_order.person_id is not null and (select count(distinct history_event.payment_id) from public.commerce_orders history_order join public.normalized_payment_events history_event on history_event.order_id=history_order.id and history_event.data_scope='production' and history_event.sale_financial_effect>0 where history_order.project_id=event.project_id and history_order.person_id=buyer_order.person_id) ${buyerSegment==="recurring"?">=2":"=1"}))`}
 
 export async function loadDashboardMetricValues(database:Database,projectId:string,periodDays:number,

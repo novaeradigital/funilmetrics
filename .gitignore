@@ -11,3 +11,9 @@ coverage/
 .DS_Store
 Thumbs.db
 
+
+# Locais desta maquina (nao versionar)
+.venv-transcricao/
+materiais/
+output/
+.codex-work/
