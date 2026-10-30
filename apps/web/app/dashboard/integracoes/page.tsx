@@ -139,6 +139,16 @@ export default async function IntegrationsPage({
         and connection.provider='lastlink'`,
     [active.project.organization_id,scope.project_id],
   )).rows[0]??{total:0,active:0,last_event_at:null};
+  const configCheckoutSummary=(await database.pool.query<{total:number;active:number;last_event_at:Date|null}>(
+    `select count(distinct connection.id)::int total,
+            count(distinct connection.id) filter(where connection.status='active')::int active,
+            max(event.received_at) last_event_at
+       from public.connections connection
+       left join public.raw_events event on event.connection_id=connection.id
+      where connection.organization_id=$1 and connection.project_id=$2
+        and connection.provider='configcheckout'`,
+    [active.project.organization_id,scope.project_id],
+  )).rows[0]??{total:0,active:0,last_event_at:null};
   const metaConnections = configured.filter((item)=>item.provider==="meta_ads");
   const metaSystemConfig = metaConnections.find((item)=>
     String(item.configuration.authorizationMode??"system_user")==="system_user" &&
@@ -282,6 +292,20 @@ export default async function IntegrationsPage({
                 : "Cada produto pode receber uma URL e um token próprios."}</small>
               <Link className="secondary-button" href="/dashboard/integracoes/lastlink">
                 {lastlinkSummary.total?"Gerenciar produtos":"Conectar produto"}
+              </Link>
+            </article>
+            <article className="integration-entry-card">
+              <div><span className={configCheckoutSummary.active?"status-dot":"status-dot is-muted"}/>
+                <p><small>Vendas e pagamentos</small><strong>ConfigCheckout</strong></p></div>
+              <p>{configCheckoutSummary.total
+                ? `${configCheckoutSummary.active} de ${configCheckoutSummary.total} vendedor(es) conectado(s)`
+                : "Nenhum vendedor conectado neste projeto."}</p>
+              <small>{configCheckoutSummary.last_event_at
+                ? `Último evento em ${new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short",
+                    timeZone:active.project.timezone}).format(configCheckoutSummary.last_event_at)}`
+                : "Cada vendedor recebe uma URL e um token próprios."}</small>
+              <Link className="secondary-button" href="/dashboard/integracoes/configcheckout">
+                {configCheckoutSummary.total?"Gerenciar vendedores":"Conectar vendedor"}
               </Link>
             </article>
           </section>

@@ -2001,3 +2001,23 @@ O editor persiste e aplica configurações por instância, incluindo granularida
   por anúncio); valor revertido em vermelho na Saúde financeira. O bloco
   de CSS do D-139 foi substituído pelo bloco D-140 em
   `apps/web/app/dashboard-editor.css`.
+
+## D-141 — Fonte ConfigCheckout: vendas do checkout próprio via webhook
+
+- Contexto: as vendas dos checkouts do ConfigCheckout (plataforma própria)
+  precisam entrar no Funil Metrics para análise nos dashboards. A
+  alternativa de integrar direto no gateway (AppMax) foi descartada
+  porque o pedido cru do gateway não carrega o contexto de marketing
+  (UTMs, fbp, fbc, domínio) que o checkout captura na página.
+- Decisão: nova fonte `configcheckout` no molde da fonte Lastlink
+  (receptor versionado na API, eventos brutos com idempotência,
+  normalizador próprio no worker, página da integração em Integrações),
+  com contrato v1 próprio documentado em `docs/INTEGRACOES.md`. O
+  ConfigCheckout emite por job em fila a cada transição do pedido, a
+  partir dos pontos únicos de transição dele (confirmação atômica,
+  análise, eventos negativos, criação e baixas manuais).
+- Identidade e governança: o pedido é identificado pelo token dele; a
+  pessoa ganha o identificador `document`; a oferta é o checkout do
+  pedido; comissão de produtor não existe nesta fonte (cobertura parcial
+  na base por comissão, completa na base por valor total); baixa manual
+  entra sem efeito financeiro, pela régua de id de pagamento.

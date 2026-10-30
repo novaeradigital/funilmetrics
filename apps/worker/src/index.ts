@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createDatabase } from "@funil-metrics/database";
 import { PRODUCT_NAME } from "@funil-metrics/domain";
 import { processLastlinkBatch } from "./lastlink-processor.js";
+import { processConfigCheckoutBatch } from "./configcheckout-processor.js";
 import { evaluateDataQuality } from "./data-quality-monitor.js";
 import { loadR2StorageConfig } from "./r2-storage.js";
 import { loadClamAvConfig } from "./clamav-scanner.js";
@@ -109,6 +110,16 @@ export async function runWorker(signal: AbortSignal) {
         if (result.claimed > 0) {
           process.stdout.write(
             `${JSON.stringify({ event: "lastlink_batch_processed", ...result })}\n`,
+          );
+        }
+        const configCheckoutResult = await processConfigCheckoutBatch(
+          database.pool,
+          batchSize,
+          maxAttempts,
+        );
+        if (configCheckoutResult.claimed > 0) {
+          process.stdout.write(
+            `${JSON.stringify({ event: "configcheckout_batch_processed", ...configCheckoutResult })}\n`,
           );
         }
         const driveInventory = await processGoogleDriveInventory(database.pool);

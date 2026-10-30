@@ -150,6 +150,127 @@ Validar:
 - Moeda e significado exato dos preços.
 - Order bump, upsell, assinatura e parcelamento inteligente.
 
+## ConfigCheckout
+
+Objetivo: pedidos, compradores, produtos, pagamentos, estornos e atribuição
+das vendas feitas nos checkouts do ConfigCheckout (plataforma de checkout
+própria), para análise nos dashboards sem depender dos dados crus do gateway.
+
+Decisões:
+
+- A fonte é o ConfigCheckout, não o gateway (AppMax) direto: o pedido no
+  ConfigCheckout já guarda o contexto de marketing capturado na página
+  (UTMs, fbp, fbc, domínio de origem e visitante), que o gateway sozinho
+  não devolve.
+- Guardar o payload bruto antes de normalizar (mesmo padrão da Lastlink).
+- Uma conexão por vendedor: cada vendedor cola a URL e o token da conexão
+  nas Integrações do ConfigCheckout dele.
+- Contrato próprio e versionado (`version: 1`), porque os dois lados são
+  mantidos pelo mesmo time.
+
+### Autenticação
+
+O ConfigCheckout envia o header `x-configcheckout-token`. O valor é segredo,
+definido por quem cria a conexão no Funil Metrics, salvo aqui somente como
+hash (scrypt) e no ConfigCheckout criptografado. Rotação mantém o token
+anterior válido por 24 horas. Depois de salvo, o valor completo não é
+exibido em nenhum dos dois painéis.
+
+### Envelope do webhook
+
+`POST /webhooks/configcheckout/:connectionPublicId` com o corpo:
+
+- `id`: uuid do evento, gerado pelo ConfigCheckout a cada disparo.
+- `type`: um dos eventos do catálogo abaixo.
+- `version`: versão do contrato (atual: 1).
+- `occurred_at`: quando o evento aconteceu, com fuso.
+- `test`: verdadeiro quando o pedido é de teste (compra do próprio
+  vendedor); eventos de teste não alimentam métricas de produção.
+- `seller.id`: id do vendedor no ConfigCheckout.
+- `order`: retrato completo do pedido no momento do evento (comprador com
+  e-mail, telefone, documento e endereço com UF; produto e kit; valores
+  subtotal, descontos, frete, juros e total como texto decimal; método e
+  parcelas; ids do gateway; `confirmation` igual a `gateway` ou `manual`;
+  atribuição com `utm` no formato gravado pelo checkout (`utm_source`,
+  `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`), `fbp`, `fbc`,
+  `domain` e `visitor_id`).
+
+Payload anonimizado de referência: `docs/payloads/configcheckout/`.
+
+### Eventos do catálogo
+
+- `order.created`: pedido criado no envio do formulário do checkout.
+- `payment.confirmed`: pagamento confirmado. Com `confirmation: manual`,
+  é a baixa manual do vendedor (recebimento por fora, sem pagamento de
+  gateway por trás).
+- `payment.analysis`: pagamento em análise no antifraude da fonte.
+- `payment.failed`: pagamento recusado.
+- `order.canceled`: pedido cancelado.
+- `order.refunded`: pedido estornado.
+- `order.chargeback`: pedido em chargeback.
+- `connection.test`: sondagem do botão Testar conexão do ConfigCheckout.
+  Não é evento de venda: é autenticado e guardado em quarentena como tipo
+  desconhecido, de propósito.
+
+Tipos desconhecidos e versões não suportadas são guardados em quarentena,
+nunca normalizados.
+
+### Mapeamento para eventos internos
+
+- `order.created` vira `payment_pending` (pedido e pagamento pendentes),
+  sem efeito financeiro.
+- `payment.confirmed` vira `payment_approved`, com efeito financeiro de
+  aprovação sobre o total do pedido.
+- `payment.analysis` vira `payment_analysis`, sem efeito financeiro.
+- `payment.failed` vira `payment_failed`, sem efeito financeiro.
+- `order.canceled` vira `payment_cancelled`, sem efeito financeiro.
+- `order.refunded` vira `payment_refunded`, com efeito de reversão.
+- `order.chargeback` vira `payment_chargeback`, com efeito de reversão.
+
+A identidade do pedido entre eventos é o `token` do pedido no
+ConfigCheckout. A pessoa é resolvida por e-mail, telefone e documento
+(novo tipo de identificador: `document`). A oferta interna é o checkout
+do pedido (`checkout:<id>`); sem checkout, a oferta é o próprio produto
+(`product:<id>`). A data do evento usa `paid_at` na confirmação
+(`payment_date`), `created_at` na criação e `occurred_at` nos demais.
+
+### Idempotência e retentativas
+
+- O `id` do evento é a chave de idempotência: reentregas do mesmo evento
+  são reconhecidas e não criam fato novo.
+- O ConfigCheckout envia por job em fila com até 5 tentativas e espera
+  crescente (30 s a 30 min). Falha de rede ou de status gera nova
+  tentativa; o Funil Metrics responde 202 na aceitação e 200 na
+  duplicidade.
+- O efeito financeiro é aplicado uma única vez por pagamento, pela mesma
+  régua das demais fontes.
+
+### Limitações conhecidas
+
+- O ConfigCheckout não informa comissão do produtor: o efeito financeiro
+  de comissão fica ausente (`producer_commission_missing`) e a base
+  governada de receita por comissão marca a cobertura como parcial para
+  esta fonte. A base por valor total da venda está completa.
+- A baixa manual (`confirmation: manual`) não tem id de pagamento do
+  gateway, então o efeito financeiro dela é bloqueado pela régua
+  (`payment_id_missing_financial_effect_blocked`): ela entra na jornada
+  e na atribuição, não no faturamento.
+- O kit vendido fica preservado no payload bruto; o item normalizado é o
+  produto do pedido.
+- A UF do comprador fica preservada no payload bruto (endereço); a
+  geografia normalizada continua vindo do telefone, como nas demais
+  fontes.
+- Sem carga histórica na v1: valem os eventos a partir da ativação da
+  conexão.
+
+### Saúde operacional implementada
+
+A página da integração (Integrações, ConfigCheckout) consolida por conexão
+os mesmos indicadores das demais fontes: eventos recebidos, normalizados,
+duplicados, backlog, falhas, quarentena e último evento. Do lado do
+ConfigCheckout, a linha da integração mostra o último evento enviado e
+quando ele foi aceito.
+
 ## Google Drive
 
 ## Cofre central no painel

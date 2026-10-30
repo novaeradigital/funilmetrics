@@ -67,6 +67,7 @@ export const identifierType = pgEnum("identifier_type", [
   "email",
   "phone",
   "lastlink_buyer_id",
+  "document",
 ]);
 
 export const commerceOrderStatus = pgEnum("commerce_order_status", [
@@ -78,6 +79,8 @@ export const commerceOrderStatus = pgEnum("commerce_order_status", [
   "refund_requested",
   "refunded",
   "chargeback",
+  "in_analysis",
+  "failed",
 ]);
 
 export const paymentStatus = pgEnum("payment_status", [
@@ -88,6 +91,8 @@ export const paymentStatus = pgEnum("payment_status", [
   "refund_requested",
   "refunded",
   "chargeback",
+  "in_analysis",
+  "failed",
 ]);
 
 export const creativeStatus = pgEnum("creative_status", [
