@@ -43,7 +43,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{period?
   count(*) filter(where event_type='cta_click')::int ctas from public.tracking_events
   where project_id=$1 and not is_bot and occurred_at>=now()-($2*interval '1 day')
   and ($3='' or tracking_source_id::text=$3) group by page_url order by views desc limit 25`,values)).rows;
- const daily=(await db.pool.query<Daily>(`select occurred_at::date::text day,
+ const daily=(await db.pool.query<Daily>(`select occurred_at::date::text as "day",
   count(distinct visitor_id) filter(where visitor_id is not null)::int visitors,count(*)::int events,
   count(*) filter(where event_type='video_play')::int plays,
   count(*) filter(where event_type='video_complete')::int completes from public.tracking_events
