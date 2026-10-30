@@ -1956,3 +1956,21 @@ O editor persiste e aplica configurações por instância, incluindo granularida
   conta, ao gasto. Os filtros comerciais avançados (origem, mídia, método e
   estado de pagamento, perfil do comprador) ainda não se aplicam aos três
   blocos.
+
+## D-139 — Piloto de redesign do Meus dashboards (neutro + lima)
+
+- **Data:** 30/10/2026.
+- **Status:** implementada como piloto (v1 local), aguardando aprovação visual
+  do Fábio.
+- **Origem:** referência visual do dashboard do curso (Sentinela, feito no
+  Lovable): fundo neutro quase preto, cards escuros com borda sutil e
+  verde-lima como cor de destaque. Decidido NÃO usar o Lovable: o painel já
+  é React com dados e governança ligados; o visual é camada de CSS.
+- **Decisão:** o redesign entra como camada de overrides com escopo
+  `.v2-main-canonical` no fim de `apps/web/app/dashboard-editor.css`
+  (variáveis `--v2-*` redefinidas pra paleta neutra, roxo substituído por
+  lima #a3e635 em botões primários, rankings, funil, mapa e estados de
+  edição), sem tocar nas outras telas. As cores padrão de widget novo
+  (`defaultConfig`) passam a ser lima (principal) e cinza (secundária);
+  widgets já salvos mantêm as cores que o usuário configurou. Se aprovado,
+  a mesma linguagem visual será levada às demais telas do painel.

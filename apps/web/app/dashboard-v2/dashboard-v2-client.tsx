@@ -51,7 +51,7 @@ function money(value:number,currency:string){return new Intl.NumberFormat("pt-BR
 function normalize(items:Layout){return items.map(item=>({...item}));}
 function widgetKind(instanceId:string):WidgetKind{return instanceId.split("__",1)[0] as WidgetKind}
 function newInstanceId(kind:WidgetKind){return `${kind}__${crypto.randomUUID().replaceAll("-","")}`}
-function defaultConfig(kind:WidgetKind):WidgetConfig{const definition=catalog.find(item=>item.kind===kind)!;return{title:definition.title,description:definition.description,granularity:"daily",comparison:"previous",metrics:kind==="conversion_funnel"?["meta_impressions","meta_link_clicks","meta_landing_page_views","meta_initiate_checkout","approved_payments"]:[],legend:true,tooltip:true,chartType:"composed",sort:"desc",limit:6,primaryColor:"#7947e8",secondaryColor:"#1265c7"}}
+function defaultConfig(kind:WidgetKind):WidgetConfig{const definition=catalog.find(item=>item.kind===kind)!;return{title:definition.title,description:definition.description,granularity:"daily",comparison:"previous",metrics:kind==="conversion_funnel"?["meta_impressions","meta_link_clicks","meta_landing_page_views","meta_initiate_checkout","approved_payments"]:[],legend:true,tooltip:true,chartType:"composed",sort:"desc",limit:6,primaryColor:"#a3e635",secondaryColor:"#52525b"}}
 function governedFunnelMetrics(kind:WidgetKind,metrics:unknown,base:string[]){
  if(kind!=="conversion_funnel"||!Array.isArray(metrics))return Array.isArray(metrics)?metrics.map(String):base;
  const selected=metrics.map(String).map(metric=>metric==="meta_clicks"?"meta_link_clicks":metric);
