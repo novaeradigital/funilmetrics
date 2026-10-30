@@ -6,6 +6,8 @@ import {createClient} from "../../lib/supabase/server";
 import {DashboardV2Client} from "./dashboard-v2-client";
 import {DashboardSidebar} from "../dashboard/dashboard-sidebar";
 import {calendarDateInTimeZone,shiftCalendarDate} from "../../lib/calendar-date";
+import {dddToUf,extractAdId} from "../../lib/dashboard-inteligente";
+import {UF_NAMES} from "../dashboard/dashboard-inteligente/brazil-map-data";
 
 type Search={from?:string;to?:string;account?:string;product?:string|string[];channel?:string;medium?:string;offer?:string;payment_method?:string;payment_status?:string;buyer?:string;compare?:string;basis?:string};
 type Option={id:string;name:string};
@@ -33,6 +35,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
  const buyerSegment:"new"|"recurring"|null=query.buyer==="new"||query.buyer==="recurring"?query.buyer:null;
  const filters={from,to,accountId:query.account??null,productIds:selectedProducts.length?selectedProducts:null,timezone:project.timezone,revenueBasis,
   source:query.channel??null,medium:query.medium??null,offerId:query.offer??null,paymentMethod:query.payment_method??null,paymentStatus:query.payment_status??null,buyerSegment};
+ const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
  const emptyValues={gross_revenue:{value:0,available:false},net_revenue:{value:0,available:false},
   approved_payments:{value:0,available:false},pending_payments:{value:0,available:false},reversed_payments:{value:0,available:false},
   meta_spend:{value:0,available:false},meta_impressions:{value:0,available:false},meta_clicks:{value:0,available:false},meta_link_clicks:{value:0,available:false},
@@ -40,7 +43,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
   meta_add_to_cart:{value:0,available:false},meta_initiate_checkout:{value:0,available:false}};
  const emptySeries={gross_revenue:[],net_revenue:[],approved_payments:[],reversed_payments:[],meta_spend:[],meta_impressions:[],meta_clicks:[]};
  const previousFilters={...filters,from:previousFrom,to:previousTo};
- const [metrics,previousMetrics,series,accounts,products,offers,media,paymentMethods,paymentStatuses,productSales,accountSpend,channels,hours,savedWidgets,savedTemplates]=await Promise.all([
+ const [metrics,previousMetrics,series,accounts,products,offers,media,paymentMethods,paymentStatuses,productSales,accountSpend,channels,hours,savedWidgets,savedTemplates,adSalesUtm,adSpendRows,adNames,phoneSalesRows,recentSaleRows]=await Promise.all([
   loadDashboardMetricValues(database,project.id,30,filters).catch(()=>emptyValues),
   loadDashboardMetricValues(database,project.id,30,previousFilters).catch(()=>emptyValues),
   loadDashboardMetricSeries(database,project.id,30,filters).catch(()=>emptySeries),
@@ -56,13 +59,71 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
   database.pool.query<{name:string;value:number}>(`select to_char(event.occurred_at at time zone $4,'HH24') name,count(distinct event.payment_id)::int value from public.normalized_payment_events event where event.project_id=$1 and event.data_scope='production' and event.financial_effect>0 and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day' group by 1 order by 1`,[project.id,from,to,project.timezone]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<SavedWidget>(`select coalesce(widget.config->>'v2InstanceId',widget.config->>'v2Kind') "instanceId",widget.config->>'v2Kind' kind,widget.title,widget.config,widget.grid_x,widget.grid_y,widget.grid_width,widget.grid_height,widget.display_order from public.dashboards dashboard join public.dashboard_versions version on version.dashboard_id=dashboard.id and version.status='draft' join public.dashboard_widgets widget on widget.dashboard_version_id=version.id where dashboard.project_id=$1 and dashboard.status='active' and dashboard.description='[funil-metrics:dashboard-v2]' and widget.config ? 'v2Kind' order by widget.display_order`,[project.id]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<SavedTemplate>(`select id,name,definition,created_at::text "createdAt" from public.dashboard_templates where project_id=$1 and not is_system order by created_at desc`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{utm_content:string|null;sales:number;revenue:string}>(`
+   with first_attr as (
+     select distinct on (attr.order_id) attr.order_id, attr.utm_content
+       from public.order_attributions attr
+      where attr.project_id=$1
+      order by attr.order_id, attr.created_at asc)
+   select first_attr.utm_content,
+     count(distinct event.payment_id)::int sales,
+     coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
+     from public.normalized_payment_events event
+     left join first_attr on first_attr.order_id=event.order_id
+    where event.project_id=$1 and event.data_scope='production'
+     and event.sale_financial_effect>0
+     and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day'
+     and ($5::uuid[] is null or exists(select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($5)))
+    group by first_attr.utm_content`,[project.id,from,to,project.timezone,selectedProducts.length?selectedProducts:null]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{external_ad_id:string;spend:string;impressions:string;link_clicks:string}>(`
+   select insight.external_ad_id,
+     coalesce(sum(insight.spend_base) filter(where insight.conversion_status in ('converted','not_required')),0)::text spend,
+     coalesce(sum(insight.impressions),0)::text impressions,
+     coalesce(sum(coalesce((select sum((elem->>'value')::numeric) from jsonb_array_elements(case when jsonb_typeof(insight.actions)='array' then insight.actions else '[]'::jsonb end) elem where elem->>'action_type'='link_click'),0)),0)::text link_clicks
+     from public.meta_ad_insights_daily insight
+    where insight.project_id=$1 and insight.metric_date between $2::date and $3::date
+     and ($4::uuid is null or insight.meta_ad_account_id=$4)
+    group by insight.external_ad_id`,[project.id,from,to,query.account??null]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{external_id:string;name:string;campaign_name:string|null}>(`select ad.external_id,ad.name,campaign.name campaign_name from public.meta_ads ad left join public.meta_campaigns campaign on campaign.id=ad.meta_campaign_id where ad.project_id=$1`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{phone:string|null;sales:number;revenue:string}>(`
+   select phone.normalized_value phone,
+     count(distinct event.payment_id)::int sales,
+     coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
+     from public.normalized_payment_events event
+     join public.commerce_orders ord on ord.id=event.order_id
+     left join lateral (select ident.normalized_value from public.person_identifiers ident where ident.person_id=ord.person_id and ident.project_id=ord.project_id and ident.type='phone' order by ident.created_at asc limit 1) phone on true
+    where event.project_id=$1 and event.data_scope='production' and event.sale_financial_effect>0
+     and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day'
+     and ($5::uuid[] is null or exists(select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($5)))
+    group by phone.normalized_value`,[project.id,from,to,project.timezone,selectedProducts.length?selectedProducts:null]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{occurred_at:string;amount:string;product_name:string|null;phone:string|null}>(`
+   select event.occurred_at::text occurred_at, event.${effectColumn}::text amount,
+     (select product.name from public.commerce_order_items item join public.commerce_products product on product.id=item.product_id where item.order_id=ord.id order by product.name limit 1) product_name,
+     phone.normalized_value phone
+     from public.normalized_payment_events event
+     join public.commerce_orders ord on ord.id=event.order_id
+     left join lateral (select ident.normalized_value from public.person_identifiers ident where ident.person_id=ord.person_id and ident.project_id=ord.project_id and ident.type='phone' order by ident.created_at asc limit 1) phone on true
+    where event.project_id=$1 and event.data_scope='production' and event.sale_financial_effect>0
+     and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day'
+    order by event.occurred_at desc limit 12`,[project.id,from,to,project.timezone]).then(r=>r.rows).catch(()=>[]),
  ]);
+ const salesByAd=new Map<string,{sales:number;revenue:number}>();const organic={sales:0,revenue:0};
+ for(const row of adSalesUtm){const adId=extractAdId(row.utm_content);if(!adId){organic.sales+=row.sales;organic.revenue+=Number(row.revenue);continue}const current=salesByAd.get(adId)??{sales:0,revenue:0};current.sales+=row.sales;current.revenue+=Number(row.revenue);salesByAd.set(adId,current)}
+ const spendByAd=new Map(adSpendRows.map(row=>[row.external_ad_id,row]));
+ const nameByAd=new Map(adNames.map(row=>[row.external_id,row]));
+ const adPerformance=[...new Set([...salesByAd.keys(),...spendByAd.keys()])].map(adId=>{const sale=salesByAd.get(adId)??{sales:0,revenue:0};const spendRow=spendByAd.get(adId);return{adId,name:nameByAd.get(adId)?.name??`Anúncio ${adId}`,campaign:nameByAd.get(adId)?.campaign_name??"—",sales:sale.sales,revenue:sale.revenue,spend:spendRow?Number(spendRow.spend):0,impressions:spendRow?Number(spendRow.impressions):0,linkClicks:spendRow?Number(spendRow.link_clicks):0}}).sort((a,b)=>b.revenue-a.revenue||b.spend-a.spend).slice(0,50);
+ const regionMap=new Map<string,{sales:number;revenue:number}>();let salesWithoutPhone=0;
+ for(const row of phoneSalesRows){const uf=dddToUf(row.phone);if(!uf){salesWithoutPhone+=row.sales;continue}const current=regionMap.get(uf)??{sales:0,revenue:0};current.sales+=row.sales;current.revenue+=Number(row.revenue);regionMap.set(uf,current)}
+ const regions=[...regionMap.entries()].map(([uf,value])=>({uf,name:UF_NAMES[uf]??uf,sales:value.sales,revenue:value.revenue})).sort((a,b)=>b.sales-a.sales);
+ const regionData=Object.fromEntries(regions.map(row=>[row.uf,{sales:row.sales,revenue:row.revenue}]));
+ const recentSales=recentSaleRows.map(row=>({occurredAt:row.occurred_at,amount:Number(row.amount),product:row.product_name??"Produto",uf:dddToUf(row.phone)}));
+ const intelligent={adPerformance,organic,regions,regionData,salesWithoutPhone,recentSales};
  return <main className="app-layout"><DashboardSidebar activeHref="/dashboard-v2" footerLabel="Dados conectados"/>
   <section className="app-content"><DashboardV2Client project={{id:project.id,name:project.name,currency:project.currency,timezone:project.timezone}}
    filters={{from,to,account:query.account??"",product:selectedProducts.join(","),channel:query.channel??"",medium:query.medium??"",offer:query.offer??"",payment_method:query.payment_method??"",payment_status:query.payment_status??"",buyer:buyerSegment??"",compare:query.compare??"previous",basis:revenueBasis}}
    accounts={accounts} products={products} metrics={metrics} previousMetrics={previousMetrics} series={series}
    advancedOptions={{offers,media,paymentMethods,paymentStatuses}}
    savedWidgets={savedWidgets} savedTemplates={savedTemplates}
-   rankings={{productSales:productSales as Ranked[],accountSpend:accountSpend as Ranked[],channels:channels as Ranked[],hours:hours as Ranked[]}}/>
+   rankings={{productSales:productSales as Ranked[],accountSpend:accountSpend as Ranked[],channels:channels as Ranked[],hours:hours as Ranked[]}} intelligent={intelligent}/>
   </section></main>;
 }

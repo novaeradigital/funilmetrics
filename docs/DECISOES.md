@@ -1932,3 +1932,27 @@ O editor persiste e aplica configurações por instância, incluindo granularida
   array `actions` (D-136); métrica derivada com denominador zero é exibida
   como indisponível ("—"), nunca zero fabricado; escopo sempre `production`
   e projeto acessível ao usuário, como nas demais telas.
+
+## D-138 — Blocos do Dashboard Inteligente como widgets do Meus dashboards
+
+- **Data:** 30/10/2026.
+- **Status:** implementada (v1 local).
+- **Origem:** pedido do Fábio. O Meus dashboards (`/dashboard-v2`) já é a tela
+  mais completa do painel; os blocos exclusivos do Dashboard Inteligente
+  passam a existir lá como widgets do layout personalizável.
+- **Decisão:** três novos tipos de widget no catálogo do v2: `region_sales`
+  (mapa do Brasil + ranking por UF), `ad_performance` (tabela por anúncio) e
+  `recent_sales` (últimas vendas aprovadas). Eles entram pela biblioteca do
+  modo "Personalizar layout": podem ser incluídos, removidos, duplicados,
+  movidos e salvos em templates, como os demais. O `allowedKinds` do servidor
+  (`dashboard-v2/actions.ts`) foi liberado pros três tipos. A página
+  standalone `/dashboard/dashboard-inteligente` (D-137) permanece como a
+  visão completa e dedicada do cruzamento.
+- **Dados:** as consultas dos blocos seguem as convenções do v2: intervalo de
+  datas dos filtros da tela, base de receita selecionada (comissão do
+  produtor ou valor total), gasto convertido (`spend_base`, somente linhas
+  `converted`/`not_required`) e reuso de `extractAdId`/`dddToUf` da lib do
+  Dashboard Inteligente. O filtro de produtos se aplica às vendas; o de
+  conta, ao gasto. Os filtros comerciais avançados (origem, mídia, método e
+  estado de pagamento, perfil do comprador) ainda não se aplicam aos três
+  blocos.

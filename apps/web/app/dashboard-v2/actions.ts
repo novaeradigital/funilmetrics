@@ -10,6 +10,7 @@ const marker="[funil-metrics:dashboard-v2]";
 const allowedKinds=new Set([
  "kpi_revenue","kpi_net_revenue","kpi_ticket","kpi_cpa","kpi_spend","kpi_profit","kpi_roas","financial_health","financial_chart",
  "product_sales","account_spend","channel_sales","hour_sales","conversion_funnel",
+ "region_sales","ad_performance","recent_sales",
 ]);
 const granularities=new Set(["daily","weekly","monthly"]),comparisons=new Set(["previous","none"]),chartTypes=new Set(["composed","bars","lines"]),sorts=new Set(["desc","asc"]);
 const governedMetrics=new Set(["meta_impressions","meta_link_clicks","meta_landing_page_views","meta_view_content","meta_add_to_cart","meta_initiate_checkout","pending_payments","approved_payments","gross_revenue"]);
