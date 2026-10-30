@@ -10,6 +10,7 @@ type Props={activeHref:string;footerLabel?:string;projects:ProjectOption[];activ
 const navigationGroups=[
  {key:"overview",label:"Visão geral",icon:"overview",items:[
   {href:"/dashboard",label:"Resumo executivo"},
+  {href:"/dashboard/dashboard-inteligente",label:"Dashboard Inteligente"},
   {href:"/dashboard-v2",label:"Meus dashboards"},
   {href:"/dashboard/dashboards?panel=ai",label:"Criar com IA"},
   {href:"/dashboard/relatorios",label:"Relatórios"},

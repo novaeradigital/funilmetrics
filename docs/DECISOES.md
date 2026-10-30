@@ -1905,3 +1905,30 @@ O editor persiste e aplica configurações por instância, incluindo granularida
   exibido no seletor de colunas. Campos desconhecidos e duplicados são
   descartados, sem remover silenciosamente métricas válidas selecionadas pelo
   usuário.
+
+## D-137 — Dashboard Inteligente: visão por anúncio cruzando vendas e Meta
+
+- **Data:** 29/10/2026.
+- **Status:** implementada (v1 local).
+- **Origem:** curso "Dashboard Inteligente" (Comunidade Growth Hackers/Cademi) e
+  call "Dashboard com IA"; menu novo no grupo Visão geral, rota
+  `/dashboard/dashboard-inteligente`. Os dashboards existentes não mudam.
+- **Decisão:** a tela é uma VISÃO de leitura que cruza vendas em produção
+  (Lastlink, mesma base financeira do Resumo executivo) com insights diários da
+  Meta pelo ID exato do anúncio. NÃO altera o modelo de atribuição do produto
+  (jornada multi-toque preservada): é uma régua adicional, last click por
+  anúncio, restrita a esta tela.
+- **Chave de cruzamento:** `utm_content` da primeira atribuição registrada do
+  pedido (`order_attributions`), extraído por `extractAdId`
+  (`apps/web/lib/dashboard-inteligente.ts`): ID numérico de 5 a 25 dígitos,
+  aceito limpo ou como último trecho válido de pacote composto. Sem ID válido,
+  a venda entra nos totais e na linha "Orgânico / sem anúncio" da tabela.
+- **Regiões:** a Lastlink não envia cidade/UF do comprador (verificado em
+  1.000 payloads reais: comprador traz nome, e-mail, telefone e documento).
+  A UF exibida no mapa é ESTIMADA pelo DDD do telefone do comprador
+  (`dddToUf`), e a tela rotula a estimativa. Venda sem telefone fica fora do
+  mapa e é contada na nota do bloco.
+- **Guardrails:** cliques no link vêm só do `action_type` `link_click` do
+  array `actions` (D-136); métrica derivada com denominador zero é exibida
+  como indisponível ("—"), nunca zero fabricado; escopo sempre `production`
+  e projeto acessível ao usuário, como nas demais telas.

@@ -27,3 +27,28 @@ de todos os tipos e não inferem receita ou compras.
 Quando o denominador for zero, a ação não tiver sido recebida ou a cobertura
 cambial estiver incompleta, a métrica derivada deve aparecer como indisponível,
 nunca como zero fabricado.
+
+## Dashboard Inteligente (cruzamento vendas × Meta, por anúncio)
+
+Base de venda: eventos de pagamento em produção com `financial_effect > 0`
+(mesma base do Resumo executivo). Base de gasto: `meta_ad_insights_daily`
+do projeto, na moeda do projeto. Janela: período selecionado; a variação
+compara com a janela imediatamente anterior de mesma duração.
+
+- **Faturamento bruto:** soma dos efeitos financeiros positivos do período.
+- **Gasto com ads:** soma de `spend` dos insights diários do período.
+- **Lucro (Dashboard Inteligente):** `faturamento bruto - gasto com ads`.
+  Não desconta taxas da plataforma nem comissões; não confundir com a
+  receita líquida do Resumo executivo.
+- **Vendas aprovadas:** pagamentos distintos com efeito positivo.
+- **ROAS:** `faturamento / gasto`. Sem gasto no período: indisponível.
+- **CPA:** `gasto / vendas aprovadas`. Sem vendas: indisponível.
+- **Ticket médio:** `faturamento / vendas aprovadas`. Sem vendas:
+  indisponível.
+- **Por anúncio:** vendas e faturamento agrupados pelo ID extraído do
+  `utm_content`; gasto, impressões e cliques no link agrupados por
+  `external_ad_id`. **CTR de link:** `cliques no link / impressões * 100`.
+  **CPC de link:** `gasto / cliques no link`. Denominador zero ou ausência
+  de `link_click` resulta em indisponível, nunca zero fabricado.
+- **Participação regional:** vendas da UF / total de vendas do período,
+  com UF estimada pelo DDD do telefone do comprador (ver D-137).
