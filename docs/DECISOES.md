@@ -2204,3 +2204,19 @@ so tempo e percepcao. A busca parcial sem recarregar a pagina fica
 como evolucao estrutural futura, se a troca de filtros continuar
 pesada.
 
+## D-154 - Carregamento individual por cartao ao trocar filtros
+
+A referencia do dono e o painel da Metrito: ao mudar o filtro,
+cada cartao mostra o proprio indicador de carregamento em vez da
+pagina inteira travar. No Meus dashboards, qualquer aplicacao de
+filtro (botao Atualizar, seletores simples, selecao multipla ao
+fechar, periodo) liga um estado de carregando que troca o corpo de
+cada widget por um indicador girando verde mais barras de
+esqueleto, mantendo o titulo do cartao visivel. Quando os dados
+novos chegam, o estado desliga sozinho (com uma trava de seguranca
+de 20 segundos). E uma mudanca visual: os valores continuam
+chegando juntos na resposta do servidor. A entrega progressiva de
+verdade (cada bloco buscando o seu dado) segue como evolucao
+estrutural possivel, sem ganho de tempo total esperado, so de
+progressividade.
+
