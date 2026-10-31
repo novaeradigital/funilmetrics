@@ -1,4 +1,5 @@
 import {redirect} from "next/navigation";
+import {after} from "next/server";
 import {getActiveProject} from "../../lib/active-project";
 import {getDatabase} from "../../lib/database";
 import {loadDashboardMetricSeries,loadDashboardMetricValues} from "../../lib/dashboard-metric-values";
@@ -28,7 +29,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
  if(!data.user)redirect("/login");
  const context=await getActiveProject(data.user.id);if(!context.project)redirect("/dashboard/projetos");
  const project=context.project,database=getDatabase();
- await queueMetaSyncIfStale(database.pool,{organizationId:project.organization_id,projectId:project.id,authUserId:data.user.id}).catch(()=>0);
+ after(async()=>{await queueMetaSyncIfStale(database.pool,{organizationId:project.organization_id,projectId:project.id,authUserId:data.user.id}).catch(()=>0)});
  const today=calendarDateInTimeZone(new Date(),project.timezone);
  const to=validDate(query.to)??today;
  const from=validDate(query.from)??shiftCalendarDate(today,-29);

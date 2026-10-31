@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { DashboardSidebar } from "../dashboard-sidebar";
 import { DashboardTopbar } from "../dashboard-topbar";
 import { getDatabase } from "../../../lib/database";
@@ -147,7 +148,7 @@ export default async function DashboardInteligentePage({ searchParams }: PagePro
 
   const project = active.project;
   const database = getDatabase();
-  await queueMetaSyncIfStale(database.pool, { organizationId: project.organization_id, projectId: project.id, authUserId: authData.user.id }).catch(() => 0);
+  after(async () => { await queueMetaSyncIfStale(database.pool, { organizationId: project.organization_id, projectId: project.id, authUserId: authData.user.id }).catch(() => 0); });
   const userId = authData.user.id;
   const days = period.days;
 

@@ -2191,3 +2191,16 @@ selecao mudou. O botao Atualizar continua existindo como
 atualizacao manual, e o periodo personalizado segue com o botao
 Aplicar periodo.
 
+## D-153 - Carregamento percebido dos dashboards
+
+Trocar filtros recarregava a pagina inteira sem nenhum retorno
+visual ate o servidor responder, e a checagem de sincronizacao da
+Meta rodava antes das consultas, bloqueando a abertura. Agora o
+Meus dashboards e o Dashboard Inteligente tem tela de carregamento
+propria (esqueleto no tema do painel, exibido na hora da
+navegacao), e a checagem de sincronizacao roda depois da resposta
+(after do Next), sem atrasar as consultas. Nenhuma metrica muda; e
+so tempo e percepcao. A busca parcial sem recarregar a pagina fica
+como evolucao estrutural futura, se a troca de filtros continuar
+pesada.
+
