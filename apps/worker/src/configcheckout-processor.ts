@@ -314,24 +314,11 @@ async function processCandidate(
         id: string;
         status: keyof typeof paymentRank;
       }>(
-        normalized.payment.externalPaymentId
-          ? `select id, status
-               from public.payments
-              where connection_id = $1
-                and data_scope = $2
-                and external_payment_id = $3
-              for update`
-          : `select id, status
-               from public.payments
-              where order_id = $1
-              for update`,
-        normalized.payment.externalPaymentId
-          ? [
-              raw.connection_id,
-              normalized.scope,
-              normalized.payment.externalPaymentId,
-            ]
-          : [orderId],
+        `select id, status
+           from public.payments
+          where order_id = $1
+          for update`,
+        [orderId],
       );
 
       if (!existingPayment.rowCount) {
@@ -367,6 +354,7 @@ async function processCandidate(
               set status = $2,
                   method = coalesce(method, $3),
                   installments = coalesce(installments, $4),
+                  external_payment_id = coalesce(external_payment_id, $5),
                   updated_at = now()
             where id = $1`,
           [
@@ -374,6 +362,7 @@ async function processCandidate(
             nextStatus,
             normalized.payment.method ?? null,
             normalized.payment.installments ?? null,
+            normalized.payment.externalPaymentId ?? null,
           ],
         );
       }

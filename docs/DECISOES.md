@@ -2220,3 +2220,17 @@ verdade (cada bloco buscando o seu dado) segue como evolucao
 estrutural possivel, sem ganho de tempo total esperado, so de
 progressividade.
 
+## D-155 - Pagamento do pedido resolvido pelo pedido, nao pelo id externo
+
+Em operacao real, o evento de pedido criado chega sem o id de
+pagamento do gateway (o pedido ainda nao foi pago) e o processador
+grava o pagamento do pedido com id externo vazio. Quando a
+confirmacao chega com o id real, a busca pelo id externo nao
+encontrava a linha do pedido e a insercao de um segundo pagamento
+violava a unicidade de um pagamento por pedido: o evento era
+retentado e acabava em quarentena, e a venda nao aparecia no
+painel. Correcao: o processador resolve o pagamento SEMPRE pela
+linha do pedido (que e unica por desenho) e preenche o id externo
+na atualizacao quando a confirmacao o traz. Eventos em quarentena
+por esse erro voltam para a fila e normalizam.
+
