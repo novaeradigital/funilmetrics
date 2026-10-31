@@ -2124,3 +2124,12 @@ dormente e os projetos com aplicativo proprio seguem como antes. Para
 perfis que nao tem papel no aplicativo, a Meta ainda exige o app em
 modo ativo com revisao das permissoes, regra da propria Meta.
 
+## D-148 - CSS do hub de integracoes restaurado
+
+A pagina de integracoes abria sem os cartoes e com um arco gigante: as
+classes integration-hub-* e integration-logo usadas pelo hub nunca
+existiram no styles.css (a leva do D-142 gravou a estrutura, mas o CSS
+nao entrou no arquivo). Sem a regra de tamanho, o icone de busca em
+SVG escalava para a largura toda da tela. Bloco de CSS do hub gravado
+no styles.css seguindo o padrao visual dos cartoes existentes.
+
