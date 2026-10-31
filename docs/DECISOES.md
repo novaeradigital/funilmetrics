@@ -2162,3 +2162,19 @@ conta marcada continua significando todas as contas. O parametro da
 URL segue sendo a lista de contas separada por virgula, validada
 como UUID no servidor.
 
+## D-151 - Gasto da Meta visivel mesmo com filtro comercial
+
+Ate aqui, selecionar um produto (ou oferta, canal, meio, metodo,
+status de pagamento ou segmento de comprador) no Meus dashboards
+marcava todas as metricas da Meta como indisponiveis, embora o
+gasto estivesse calculado. A leitura do dono do produto e a de que
+o painel existe para comparar a receita do recorte com o gasto das
+contas no mesmo periodo. A partir desta decisao, as metricas da
+Meta sao do escopo das contas de anuncios selecionadas e ficam
+visiveis junto de qualquer filtro comercial; a disponibilidade
+depende so dos dados da Meta (linhas convertidas presentes). O
+grafico financeiro volta a desenhar a linha de investimento com
+produto selecionado. O rodape do cartao de investimento, quando nao
+ha gasto no periodo, diz "Sem gasto no periodo" em vez de
+"Conversao pendente".
+

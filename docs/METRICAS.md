@@ -64,3 +64,12 @@ zero. Os metodos crus das fontes sao agrupados em Pix, Cartao, Boleto e
 Outros. Por isso o Pix tende a mostrar taxa menor que o cartao: o PIX
 gerado e nao pago entra como concluido nao aprovado.
 
+## Gasto da Meta com filtros comerciais (D-151)
+
+O gasto e as demais metricas da Meta pertencem ao escopo das
+contas de anuncios selecionadas no filtro de contas. Filtros
+comerciais (produto, oferta, canal, meio, metodo, status de
+pagamento, segmento de comprador) recortam as vendas, mas nao
+escondem o gasto: ele continua visivel para comparacao no mesmo
+periodo, sempre rotulado como gasto das contas selecionadas.
+

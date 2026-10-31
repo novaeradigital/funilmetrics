@@ -21,7 +21,7 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
  filters:DashboardQueryFilters={}){
  const revenueBasis=filters.revenueBasis==="sale_total"?"sale_total":"producer_commission";
  const accountFilter=filters.accountIds?.length?filters.accountIds:(filters.accountId?[filters.accountId]:null);
- const commerceScoped=Boolean(filters.productId||filters.productIds?.length||filters.offerId||filters.source||filters.medium||filters.paymentMethod||filters.paymentStatus||filters.buyerSegment);
+
  const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
  const financial=(await database.pool.query<{gross_revenue:string;net_revenue:string;
   approved_payments:number;pending_payments:number;reversed_payments:number;eligible_events:number;covered_events:number}>(`select
@@ -82,17 +82,17 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
   pending_payments:{value:Number(financial?.pending_payments??0),available:true},
   reversed_payments:{value:Number(financial?.reversed_payments??0),available:true},
   meta_spend:{value:Number(meta?.spend??0),currency:meta?.currency??undefined,
-   available:!commerceScoped&&Number(meta?.converted_rows??0)>0,
+   available:Number(meta?.converted_rows??0)>0,
    partial:Boolean(meta?.rows)&&Number(meta?.blocked_rows??0)>0,
    coverage:Number(meta?.rows??0)>0?Number(meta?.converted_rows??0)/Number(meta?.rows):0,
    blockedRows:Number(meta?.blocked_rows??0),status:Number(meta?.blocked_rows??0)>0?"partial":"complete"},
-  meta_impressions:{value:Number(meta?.impressions??0),available:!commerceScoped&&Boolean(meta?.rows)},
-  meta_clicks:{value:Number(meta?.clicks??0),available:!commerceScoped&&Boolean(meta?.rows)},
-  meta_link_clicks:{value:Number(metaActions?.link_clicks??0),available:!commerceScoped&&Number(metaActions?.action_rows??0)>0},
-  meta_landing_page_views:{value:Number(metaActions?.landing_page_views??0),available:!commerceScoped&&Number(metaActions?.action_rows??0)>0},
-  meta_view_content:{value:Number(metaActions?.view_content??0),available:!commerceScoped&&Number(metaActions?.action_rows??0)>0},
-  meta_add_to_cart:{value:Number(metaActions?.add_to_cart??0),available:!commerceScoped&&Number(metaActions?.action_rows??0)>0},
-  meta_initiate_checkout:{value:Number(metaActions?.initiate_checkout??0),available:!commerceScoped&&Number(metaActions?.action_rows??0)>0},
+  meta_impressions:{value:Number(meta?.impressions??0),available:Boolean(meta?.rows)},
+  meta_clicks:{value:Number(meta?.clicks??0),available:Boolean(meta?.rows)},
+  meta_link_clicks:{value:Number(metaActions?.link_clicks??0),available:Number(metaActions?.action_rows??0)>0},
+  meta_landing_page_views:{value:Number(metaActions?.landing_page_views??0),available:Number(metaActions?.action_rows??0)>0},
+  meta_view_content:{value:Number(metaActions?.view_content??0),available:Number(metaActions?.action_rows??0)>0},
+  meta_add_to_cart:{value:Number(metaActions?.add_to_cart??0),available:Number(metaActions?.action_rows??0)>0},
+  meta_initiate_checkout:{value:Number(metaActions?.initiate_checkout??0),available:Number(metaActions?.action_rows??0)>0},
  } satisfies DashboardMetricValues;
 }
 
@@ -100,7 +100,7 @@ export async function loadDashboardMetricSeries(database:Database,projectId:stri
  filters:DashboardQueryFilters={}){
  const revenueBasis=filters.revenueBasis==="sale_total"?"sale_total":"producer_commission";
  const accountFilter=filters.accountIds?.length?filters.accountIds:(filters.accountId?[filters.accountId]:null);
- const commerceScoped=Boolean(filters.productId||filters.productIds?.length||filters.offerId||filters.source||filters.medium||filters.paymentMethod||filters.paymentStatus||filters.buyerSegment);
+
  const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
  const financial=(await database.pool.query<{metric_day:string;gross_revenue:string;net_revenue:string;
   approved_payments:number;reversed_payments:number}>(`select
@@ -131,8 +131,8 @@ export async function loadDashboardMetricSeries(database:Database,projectId:stri
   net_revenue:financial.map(row=>({date:row.metric_day,value:Number(row.net_revenue)})),
   approved_payments:financial.map(row=>({date:row.metric_day,value:Number(row.approved_payments)})),
   reversed_payments:financial.map(row=>({date:row.metric_day,value:Number(row.reversed_payments)})),
-  meta_spend:commerceScoped?[]:meta.map(row=>({date:row.metric_day,value:Number(row.spend)})),
-  meta_impressions:commerceScoped?[]:meta.map(row=>({date:row.metric_day,value:Number(row.impressions)})),
-  meta_clicks:commerceScoped?[]:meta.map(row=>({date:row.metric_day,value:Number(row.clicks)})),
+  meta_spend:meta.map(row=>({date:row.metric_day,value:Number(row.spend)})),
+  meta_impressions:meta.map(row=>({date:row.metric_day,value:Number(row.impressions)})),
+  meta_clicks:meta.map(row=>({date:row.metric_day,value:Number(row.clicks)})),
  } satisfies DashboardMetricSeries;
 }
