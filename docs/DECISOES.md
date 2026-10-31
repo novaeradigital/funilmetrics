@@ -2150,3 +2150,15 @@ external_subject_id) autoriza de novo no projeto, a conexao
 existente e reaproveitada, com o token rotacionado, a autorizacao
 reativada e a lista de contas preservada. Um perfil, um cartao.
 
+## D-150 - Filtro de contas de anuncios com selecao multipla
+
+No Meus dashboards, o filtro de contas de anuncios aceitava uma
+conta por vez, enquanto o de produtos ja era multiplo. Quem opera
+varias contas (por exemplo, dois perfis conectados) precisava somar
+o gasto na mao. O filtro de contas agora usa o mesmo componente de
+selecao multipla dos produtos: marcar varias contas soma os
+insights delas em todas as metricas e graficos do painel, e nenhuma
+conta marcada continua significando todas as contas. O parametro da
+URL segue sendo a lista de contas separada por virgula, validada
+como UUID no servidor.
+

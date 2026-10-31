@@ -4,7 +4,7 @@ export type DashboardMetricValues=Record<string,{value:number;currency?:string;a
   partial?:boolean;coverage?:number;blockedRows?:number;status?:string}>;
 export type DashboardMetricPoint={date:string;value:number};
 export type DashboardMetricSeries=Record<string,DashboardMetricPoint[]>;
-export type DashboardQueryFilters={productId?:string|null;productIds?:string[]|null;accountId?:string|null;campaignId?:string|null;
+export type DashboardQueryFilters={productId?:string|null;productIds?:string[]|null;accountId?:string|null;accountIds?:string[]|null;campaignId?:string|null;
  from?:string|null;to?:string|null;timezone?:string|null;
  offerId?:string|null;source?:string|null;medium?:string|null;paymentMethod?:string|null;paymentStatus?:string|null;buyerSegment?:"new"|"recurring"|null;
  revenueBasis?:"producer_commission"|"sale_total"|null};
@@ -20,6 +20,7 @@ function commerceFilterSql(buyerSegment:DashboardQueryFilters["buyerSegment"]){r
 export async function loadDashboardMetricValues(database:Database,projectId:string,periodDays:number,
  filters:DashboardQueryFilters={}){
  const revenueBasis=filters.revenueBasis==="sale_total"?"sale_total":"producer_commission";
+ const accountFilter=filters.accountIds?.length?filters.accountIds:(filters.accountId?[filters.accountId]:null);
  const commerceScoped=Boolean(filters.productId||filters.productIds?.length||filters.offerId||filters.source||filters.medium||filters.paymentMethod||filters.paymentStatus||filters.buyerSegment);
  const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
  const financial=(await database.pool.query<{gross_revenue:string;net_revenue:string;
@@ -47,9 +48,9 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
    from public.meta_ad_insights_daily where project_id=$1
    and metric_date>=coalesce($5::date,(current_date-(($2::integer-1)*interval '1 day'))::date)
    and metric_date<=coalesce($6::date,current_date)
-   and ($3::uuid is null or meta_ad_account_id=$3)
+   and ($3::uuid[] is null or meta_ad_account_id=any($3))
    and ($4::uuid is null or meta_campaign_id=$4)`,[projectId,periodDays,
-    filters.accountId??null,filters.campaignId??null,filters.from??null,filters.to??null])).rows[0];
+    accountFilter,filters.campaignId??null,filters.from??null,filters.to??null])).rows[0];
  const metaActions=await database.pool.query<{link_clicks:string;landing_page_views:string;view_content:string;add_to_cart:string;initiate_checkout:string;action_rows:number}>(
   `select
    coalesce(sum(case when item.value->>'action_type'='link_click' then (item.value->>'value')::numeric else 0 end),0)::text link_clicks,
@@ -63,9 +64,9 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
    where insight.project_id=$1
    and insight.metric_date>=coalesce($5::date,(current_date-(($2::integer-1)*interval '1 day'))::date)
    and insight.metric_date<=coalesce($6::date,current_date)
-   and ($3::uuid is null or insight.meta_ad_account_id=$3)
+   and ($3::uuid[] is null or insight.meta_ad_account_id=any($3))
    and ($4::uuid is null or insight.meta_campaign_id=$4)`,[projectId,periodDays,
-    filters.accountId??null,filters.campaignId??null,filters.from??null,filters.to??null])
+    accountFilter,filters.campaignId??null,filters.from??null,filters.to??null])
   .then(result=>result.rows[0])
   .catch(()=>null);
  const eligible=Number(financial?.eligible_events??0),covered=Number(financial?.covered_events??0);
@@ -98,6 +99,7 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
 export async function loadDashboardMetricSeries(database:Database,projectId:string,periodDays:number,
  filters:DashboardQueryFilters={}){
  const revenueBasis=filters.revenueBasis==="sale_total"?"sale_total":"producer_commission";
+ const accountFilter=filters.accountIds?.length?filters.accountIds:(filters.accountId?[filters.accountId]:null);
  const commerceScoped=Boolean(filters.productId||filters.productIds?.length||filters.offerId||filters.source||filters.medium||filters.paymentMethod||filters.paymentStatus||filters.buyerSegment);
  const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
  const financial=(await database.pool.query<{metric_day:string;gross_revenue:string;net_revenue:string;
@@ -121,8 +123,8 @@ export async function loadDashboardMetricSeries(database:Database,projectId:stri
    and metric_date>=coalesce($5::date,(current_date-(($2::integer-1)*interval '1 day'))::date)
    and metric_date<=coalesce($6::date,current_date)
    and conversion_status in ('converted','not_required')
-   and ($3::uuid is null or meta_ad_account_id=$3) and ($4::uuid is null or meta_campaign_id=$4)
-   group by metric_date order by metric_date`,[projectId,periodDays,filters.accountId??null,
+   and ($3::uuid[] is null or meta_ad_account_id=any($3)) and ($4::uuid is null or meta_campaign_id=$4)
+   group by metric_date order by metric_date`,[projectId,periodDays,accountFilter,
     filters.campaignId??null,filters.from??null,filters.to??null])).rows;
  return {
   gross_revenue:financial.map(row=>({date:row.metric_day,value:Number(row.gross_revenue)})),
