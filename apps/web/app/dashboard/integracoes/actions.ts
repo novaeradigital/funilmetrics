@@ -45,20 +45,6 @@ async function requireActiveIntegrationProject(
   }
 }
 
-
-const providerPages: Record<string, string> = {
-  google_drive_app: "/dashboard/integracoes/google-drive",
-  openai: "/dashboard/integracoes/openai",
-  meta_ads: "/dashboard/integracoes/meta",
-  meta_ads_app: "/dashboard/integracoes/meta",
-  cloudflare_r2: "/dashboard/integracoes/cloudflare-r2",
-  clamav: "/dashboard/integracoes/clamav",
-  railway: "/dashboard/integracoes/railway",
-  cloudflare_account: "/dashboard/integracoes/cloudflare",
-};
-function providerPath(provider: string): string {
-  return providerPages[provider] ?? "/dashboard/integracoes";
-}
 export async function saveIntegrationConfiguration(formData: FormData) {
   const provider = field(formData, "provider", 50);
   const projectId = field(formData, "project_id", 64);
@@ -322,7 +308,7 @@ export async function saveIntegrationConfiguration(formData: FormData) {
     client.release();
   }
   revalidatePath("/dashboard/integracoes");
-  redirect(`${providerPath(provider)}?status=saved`);
+  redirect("/dashboard/integracoes?status=saved");
 }
 
 export async function updateOpenAiBudget(formData: FormData) {
@@ -416,7 +402,7 @@ export async function updateOpenAiBudget(formData: FormData) {
     client.release();
   }
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes/openai?status=budget-saved");
+  redirect("/dashboard/integracoes?status=budget-saved");
 }
 
 export async function saveAiPricing(formData:FormData){
@@ -479,7 +465,7 @@ export async function saveAiPricing(formData:FormData){
     redirect("/dashboard/integracoes?status=pricing-save-failed");
   }finally{client.release();}
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes/openai?status=pricing-saved");
+  redirect("/dashboard/integracoes?status=pricing-saved");
 }
 
 export async function validateIntegrationConnection(formData: FormData) {
@@ -611,11 +597,6 @@ export async function validateIntegrationConnection(formData: FormData) {
       };
       const profile=await read("me?fields=id,name");
       const accounts=[];
-      let campaignCount=0;
-      let adSetCount=0;
-      let adCount=0;
-      let creativeCount=0;
-      let insightCount=0;
       for(const accountId of allowlist){
         const account=await read(
           `${encodeURIComponent(accountId)}?fields=id,name,account_status,currency,timezone_name`,
@@ -651,189 +632,8 @@ export async function validateIntegrationConnection(formData: FormData) {
            String(account.timezone_name??"")],
         );
         const localAccountId=accountRow.rows[0]?.id;
-        const effectiveCurrency=accountRow.rows[0]?.currency??String(account.currency??"");
         if(!localAccountId) throw new Error("meta_account_upsert_failed");
-        const campaigns=await readAll(
-          `${encodeURIComponent(accountId)}/campaigns?fields=id,name,status,effective_status,objective,daily_budget,lifetime_budget`,
-        );
-        campaignCount+=campaigns.length;
-        for(const campaign of campaigns){
-          const campaignRow=await database.pool.query<{id:string}>(
-            `insert into public.meta_campaigns (
-               organization_id,project_id,meta_ad_account_id,external_id,name,
-               status,effective_status,objective,daily_budget_minor,lifetime_budget_minor,last_synced_at,updated_at
-             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now())
-             on conflict (project_id,external_id) do update set
-               meta_ad_account_id=excluded.meta_ad_account_id,name=excluded.name,
-               status=excluded.status,effective_status=excluded.effective_status,
-               objective=excluded.objective,daily_budget_minor=excluded.daily_budget_minor,
-               lifetime_budget_minor=excluded.lifetime_budget_minor,last_synced_at=now(),updated_at=now()
-             returning id`,
-            [authorized.organization_id,projectId,localAccountId,
-             String(campaign.id??""),String(campaign.name??"Sem nome"),
-             String(campaign.status??""),String(campaign.effective_status??""),
-             String(campaign.objective??""),campaign.daily_budget?String(campaign.daily_budget):null,
-             campaign.lifetime_budget?String(campaign.lifetime_budget):null],
-          );
-          const localCampaignId=campaignRow.rows[0]?.id;
-          if(!localCampaignId||!campaign.id) continue;
-          const adSets=await readAll(
-            `${encodeURIComponent(String(campaign.id))}/adsets?fields=id,name,status,effective_status,daily_budget,lifetime_budget,optimization_goal`,
-          );
-          adSetCount+=adSets.length;
-          for(const adSet of adSets){
-            const adSetRow=await database.pool.query<{id:string}>(
-              `insert into public.meta_ad_sets (
-                 organization_id,project_id,meta_ad_account_id,meta_campaign_id,
-                 external_id,name,status,effective_status,daily_budget_minor,
-                 lifetime_budget_minor,optimization_goal,last_synced_at,updated_at
-               ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())
-               on conflict (project_id,external_id) do update set
-                 meta_ad_account_id=excluded.meta_ad_account_id,
-                 meta_campaign_id=excluded.meta_campaign_id,name=excluded.name,
-                 status=excluded.status,effective_status=excluded.effective_status,
-                 daily_budget_minor=excluded.daily_budget_minor,
-                 lifetime_budget_minor=excluded.lifetime_budget_minor,
-                 optimization_goal=excluded.optimization_goal,
-                 last_synced_at=now(),updated_at=now()
-               returning id`,
-              [authorized.organization_id,projectId,localAccountId,localCampaignId,
-               String(adSet.id??""),String(adSet.name??"Sem nome"),
-               String(adSet.status??""),String(adSet.effective_status??""),
-               adSet.daily_budget?String(adSet.daily_budget):null,
-               adSet.lifetime_budget?String(adSet.lifetime_budget):null,
-               String(adSet.optimization_goal??"")],
-            );
-            const localAdSetId=adSetRow.rows[0]?.id;
-            if(!localAdSetId||!adSet.id)continue;
-            const ads=await readAll(
-              `${encodeURIComponent(String(adSet.id))}/ads?fields=id,name,status,effective_status,creative{id,name,thumbnail_url,image_url,object_story_spec}`,
-            );
-            adCount+=ads.length;
-            for(const ad of ads){
-              const creative=ad.creative&&typeof ad.creative==="object"
-                ? ad.creative as Record<string,unknown>:null;
-              let localCreativeId:string|null=null;
-              if(creative?.id){
-                const creativeRow=await database.pool.query<{id:string}>(
-                  `insert into public.meta_creatives(
-                     organization_id,project_id,meta_ad_account_id,external_id,
-                     name,thumbnail_url,image_url,object_story_spec,last_synced_at,updated_at
-                   ) values($1,$2,$3,$4,$5,$6,$7,$8::jsonb,now(),now())
-                   on conflict(project_id,external_id) do update set
-                     meta_ad_account_id=excluded.meta_ad_account_id,
-                     name=excluded.name,thumbnail_url=excluded.thumbnail_url,
-                     image_url=excluded.image_url,
-                     object_story_spec=excluded.object_story_spec,
-                     last_synced_at=now(),updated_at=now()
-                   returning id`,
-                  [authorized.organization_id,projectId,localAccountId,
-                   String(creative.id),String(creative.name??""),
-                   String(creative.thumbnail_url??""),String(creative.image_url??""),
-                   JSON.stringify(creative.object_story_spec??null)],
-                );
-                localCreativeId=creativeRow.rows[0]?.id??null;
-                creativeCount+=1;
-              }
-              await database.pool.query(
-                `insert into public.meta_ads(
-                   organization_id,project_id,meta_ad_account_id,meta_campaign_id,
-                   meta_ad_set_id,meta_creative_id,external_id,name,status,
-                   effective_status,last_synced_at,updated_at
-                 ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now())
-                 on conflict(project_id,external_id) do update set
-                   meta_ad_account_id=excluded.meta_ad_account_id,
-                   meta_campaign_id=excluded.meta_campaign_id,
-                   meta_ad_set_id=excluded.meta_ad_set_id,
-                   meta_creative_id=excluded.meta_creative_id,
-                   name=excluded.name,status=excluded.status,
-                   effective_status=excluded.effective_status,
-                   last_synced_at=now(),updated_at=now()`,
-                [authorized.organization_id,projectId,localAccountId,
-                 localCampaignId,localAdSetId,localCreativeId,String(ad.id??""),
-                 String(ad.name??"Sem nome"),String(ad.status??""),
-                 String(ad.effective_status??"")],
-              );
-            }
-          }
-        }
-        const insights=await readAll(
-          `${encodeURIComponent(accountId)}/insights?fields=ad_id,date_start,spend,impressions,reach,clicks,actions,action_values&level=ad&time_increment=1&date_preset=last_30d`,
-        );
-        for(const insight of insights){
-          if(!insight.ad_id||!insight.date_start)continue;
-          const local=await database.pool.query<{
-            ad_id:string;ad_set_id:string;campaign_id:string;
-          }>(
-            `select ad.id ad_id,ad.meta_ad_set_id ad_set_id,
-                    ad.meta_campaign_id campaign_id
-               from public.meta_ads ad
-              where ad.project_id=$1 and ad.external_id=$2 limit 1`,
-            [projectId,String(insight.ad_id)],
-          );
-          const ids=local.rows[0];if(!ids)continue;
-          await database.pool.query(
-            `insert into public.meta_ad_insights_daily(
-               organization_id,project_id,meta_ad_account_id,meta_campaign_id,
-               meta_ad_set_id,meta_ad_id,external_ad_id,metric_date,currency,
-               spend,spend_original,original_currency,conversion_status,
-               impressions,reach,clicks,actions,action_values,raw_metric,
-               last_synced_at,updated_at
-             ) values($1,$2,$3,$4,$5,$6,$7,$8::date,$9,$10,$10,$9,
-                      case when nullif($9,'') is null then 'missing_currency'::public.currency_conversion_status
-                           else 'pending_rate'::public.currency_conversion_status end,
-                      $11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,now(),now())
-             on conflict(project_id,external_ad_id,metric_date) do update set
-               meta_ad_account_id=excluded.meta_ad_account_id,
-               meta_campaign_id=excluded.meta_campaign_id,
-               meta_ad_set_id=excluded.meta_ad_set_id,meta_ad_id=excluded.meta_ad_id,
-               currency=excluded.currency,spend=excluded.spend,
-               spend_original=case when meta_ad_insights_daily.spend_original is null then null
-                 else excluded.spend_original end,
-               original_currency=case when meta_ad_insights_daily.spend_original is null then null
-                 else excluded.original_currency end,
-               conversion_status=case when meta_ad_insights_daily.exchange_rate is not null
-                 and meta_ad_insights_daily.original_currency is not distinct from excluded.original_currency
-                 and meta_ad_insights_daily.base_currency is not null
-                 then meta_ad_insights_daily.conversion_status
-                 when meta_ad_insights_daily.spend_original is not null and
-                 (meta_ad_insights_daily.spend is distinct from excluded.spend
-                 or meta_ad_insights_daily.original_currency is distinct from excluded.original_currency)
-                 then excluded.conversion_status else meta_ad_insights_daily.conversion_status end,
-               spend_base=case when meta_ad_insights_daily.spend_original is not null and
-                 (meta_ad_insights_daily.spend is distinct from excluded.spend
-                 or meta_ad_insights_daily.original_currency is distinct from excluded.original_currency)
-                 then case when meta_ad_insights_daily.exchange_rate is not null
-                   and meta_ad_insights_daily.original_currency is not distinct from excluded.original_currency
-                   and meta_ad_insights_daily.base_currency is not null
-                   then round(excluded.spend_original*meta_ad_insights_daily.exchange_rate,6)
-                   else null end else meta_ad_insights_daily.spend_base end,
-               impressions=excluded.impressions,reach=excluded.reach,
-               clicks=excluded.clicks,actions=excluded.actions,
-               action_values=excluded.action_values,raw_metric=excluded.raw_metric,
-               last_synced_at=now(),updated_at=now()`,
-            [authorized.organization_id,projectId,localAccountId,ids.campaign_id,
-             ids.ad_set_id,ids.ad_id,String(insight.ad_id),String(insight.date_start),
-             effectiveCurrency,String(insight.spend??"0"),
-             String(insight.impressions??"0"),String(insight.reach??"0"),
-             String(insight.clicks??"0"),JSON.stringify(insight.actions??null),
-             JSON.stringify(insight.action_values??null),JSON.stringify(insight)],
-          );
-          insightCount+=1;
-        }
       }
-      await database.pool.query(
-        `insert into public.audit_logs (
-           organization_id,project_id,actor_user_id,action,
-           target_type,target_id,after
-         ) values ($1,$2,$3,'meta_catalog_synchronized',
-                   'connection',$4,$5::jsonb)`,
-        [authorized.organization_id,projectId,authorized.actor_user_id,
-         authorized.connection_id,JSON.stringify({
-           accountCount:accounts.length,campaignCount,adSetCount,adCount,
-           creativeCount,insightCount,graphVersion,insightWindowDays:30,
-         })],
-      );
       await database.pool.query(
         `update public.connections set configuration=configuration ||
           jsonb_build_object('graphVersion',$2::text,'validatedAccounts',$3::jsonb)
@@ -938,10 +738,10 @@ export async function validateIntegrationConnection(formData: FormData) {
     } finally {
       failureClient.release();
     }
-    redirect(`${providerPath(provider)}?status=${provider}-test-failed`);
+    redirect(`/dashboard/integracoes?status=${provider}-test-failed`);
   }
   revalidatePath("/dashboard/integracoes");
-  redirect(`${providerPath(provider)}?status=${provider}-valid`);
+  redirect(`/dashboard/integracoes?status=${provider}-valid`);
 }
 
 export async function revokeMetaConnection(formData:FormData){
@@ -983,7 +783,7 @@ export async function revokeMetaConnection(formData:FormData){
   }catch{await client.query("rollback");redirect("/dashboard/integracoes?status=meta-revoke-failed")}
   finally{client.release()}
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes/meta?status=meta-revoked");
+  redirect("/dashboard/integracoes?status=meta-revoked");
 }
 
 export async function updateMetaSyncSchedule(formData:FormData){
@@ -1066,7 +866,7 @@ export async function updateMetaSyncSchedule(formData:FormData){
     redirect("/dashboard/integracoes?status=meta-schedule-failed");
   }finally{client.release()}
   revalidatePath("/dashboard/integracoes");
-  redirect(`/dashboard/integracoes/meta?status=${enabled
+  redirect(`/dashboard/integracoes?status=${enabled
     ?"meta-schedule-enabled":"meta-schedule-disabled"}`);
 }
 
@@ -1108,7 +908,7 @@ export async function correctMetaAccountCurrency(formData:FormData){
     code:error&&typeof error==="object"&&"code" in error?String(error.code):"unknown"});
     redirect("/dashboard/integracoes?status=currency-correction-failed")
   }finally{client.release()}
-  revalidatePath("/dashboard/integracoes");redirect("/dashboard/integracoes/meta?status=currency-correction-saved");
+  revalidatePath("/dashboard/integracoes");redirect("/dashboard/integracoes?status=currency-correction-saved");
 }
 
 export async function queueMetaSyncNow(formData:FormData){
@@ -1186,5 +986,5 @@ export async function queueMetaSyncNow(formData:FormData){
     redirect("/dashboard/integracoes?status=meta-sync-failed");
   }finally{client.release()}
   revalidatePath("/dashboard/integracoes");
-  redirect("/dashboard/integracoes/meta?status=meta-sync-queued");
+  redirect("/dashboard/integracoes?status=meta-sync-queued");
 }

@@ -80,6 +80,50 @@ export async function GET(request:NextRequest){
   let connectionId="";
   try{
     await client.query("begin");
+    const existing=await client.query<{id:string}>(
+      `select connection.id
+         from public.connections connection
+         join public.meta_authorizations auth on auth.connection_id=connection.id
+        where connection.project_id=$1 and connection.provider='meta_ads'
+          and auth.external_subject_id=$2
+        order by connection.created_at asc limit 1`,
+      [oauth.project_id,profile.id]);
+    if(existing.rows[0]){
+      connectionId=existing.rows[0].id;
+      await client.query(
+        `update public.connections
+            set name=$2,status='active',
+                configuration=configuration||$3::jsonb,updated_at=now()
+          where id=$1`,
+        [connectionId,`Meta OAuth - ${profile.name??profile.id}`,
+         JSON.stringify({authorizationMode:"oauth_user",appId:config.appId})]);
+      const kind=["oauth_access_token",connectionId].join(":");
+      await client.query(
+        `update public.integration_secrets set rotated_at=now()
+          where project_id=$1 and provider='meta_ads' and kind=$2 and rotated_at is null`,
+        [oauth.project_id,kind]);
+      await client.query(
+        `insert into public.integration_secrets(organization_id,project_id,provider,kind,
+         ciphertext,initialization_vector,authentication_tag)
+         values($1,$2,'meta_ads',$3,$4,$5,$6)`,
+        [oauth.organization_id,oauth.project_id,kind,
+         encrypted.ciphertext,encrypted.initializationVector,encrypted.authenticationTag]);
+      const updated=await client.query(
+        `update public.meta_authorizations
+            set external_subject_name=$2,granted_scopes=array['ads_read','business_management'],
+                token_expires_at=case when $3::int>0 then now()+($3::text||' seconds')::interval else null end,
+                status='active',revoked_at=null,last_validated_at=now(),updated_at=now()
+          where connection_id=$1`,
+        [connectionId,profile.name??null,token.expires_in??0]);
+      if(!updated.rowCount){
+        await client.query(
+          `insert into public.meta_authorizations(organization_id,project_id,connection_id,mode,
+           external_subject_id,external_subject_name,granted_scopes,token_expires_at,status,last_validated_at)
+           values($1,$2,$3,'oauth_user',$4,$5,array['ads_read','business_management'],
+           case when $6::int>0 then now()+($6::text||' seconds')::interval else null end,'active',now())`,
+          [oauth.organization_id,oauth.project_id,connectionId,profile.id,profile.name??null,token.expires_in??0]);
+      }
+    }else{
     const connection=await client.query<{id:string}>(
       `insert into public.connections(organization_id,project_id,provider,name,configuration)
        values($1,$2,'meta_ads',$3,$4::jsonb) returning id`,
@@ -98,6 +142,7 @@ export async function GET(request:NextRequest){
        values($1,$2,$3,'oauth_user',$4,$5,array['ads_read','business_management'],
        case when $6::int>0 then now()+($6::text||' seconds')::interval else null end,'active',now())`,
       [oauth.organization_id,oauth.project_id,connection.rows[0]!.id,profile.id,profile.name??null,token.expires_in??0]);
+    }
     await client.query("commit");
   }catch(error){
     await client.query("rollback");

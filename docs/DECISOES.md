@@ -2133,3 +2133,20 @@ nao entrou no arquivo). Sem a regra de tamanho, o icone de busca em
 SVG escalava para a largura toda da tela. Bloco de CSS do hub gravado
 no styles.css seguindo o padrao visual dos cartoes existentes.
 
+## D-149 - Validar leve da Meta e reconexao sem duplicar
+
+O botao Validar da conexao Meta rodava a sincronizacao completa do
+catalogo dentro do clique (campanhas, conjuntos, anuncios, criativos
+e 30 dias de insights, com gravacao de tudo). Em contas grandes a
+acao estourava e marcava a conexao como invalida mesmo com o token
+bom, como aconteceu com as conexoes novas de 2026-10-31. Agora o
+Validar da Meta faz so a checagem leve: perfil e dados basicos de
+cada conta permitida, com o registro da conta no catalogo local. O
+catalogo completo passa a ser responsabilidade exclusiva do robo de
+sincronizacao (agendada ou pelo botao de sincronizar agora).
+Na mesma leva, o retorno do OAuth deixou de criar uma conexao nova
+a cada reconexao: quando o mesmo perfil do Facebook (mesmo
+external_subject_id) autoriza de novo no projeto, a conexao
+existente e reaproveitada, com o token rotacionado, a autorizacao
+reativada e a lista de contas preservada. Um perfil, um cartao.
+
