@@ -7,6 +7,7 @@ import {DashboardV2Client} from "./dashboard-v2-client";
 import {DashboardSidebar} from "../dashboard/dashboard-sidebar";
 import {calendarDateInTimeZone,shiftCalendarDate} from "../../lib/calendar-date";
 import {dddToUf,extractAdId} from "../../lib/dashboard-inteligente";
+import {groupMethodApproval,groupMethodSales} from "../../lib/payment-methods";
 import {UF_NAMES} from "../dashboard/dashboard-inteligente/brazil-map-data";
 
 type Search={from?:string;to?:string;account?:string;product?:string|string[];channel?:string;medium?:string;offer?:string;payment_method?:string;payment_status?:string;buyer?:string;compare?:string;basis?:string};
@@ -43,7 +44,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
   meta_add_to_cart:{value:0,available:false},meta_initiate_checkout:{value:0,available:false}};
  const emptySeries={gross_revenue:[],net_revenue:[],approved_payments:[],reversed_payments:[],meta_spend:[],meta_impressions:[],meta_clicks:[]};
  const previousFilters={...filters,from:previousFrom,to:previousTo};
- const [metrics,previousMetrics,series,accounts,products,offers,media,paymentMethods,paymentStatuses,productSales,accountSpend,channels,hours,savedWidgets,savedTemplates,adSalesUtm,adSpendRows,adNames,phoneSalesRows,recentSaleRows]=await Promise.all([
+ const [metrics,previousMetrics,series,accounts,products,offers,media,paymentMethods,paymentStatuses,productSales,accountSpend,channels,hours,savedWidgets,savedTemplates,adSalesUtm,adSpendRows,adNames,phoneSalesRows,recentSaleRows,productApprovedRows,methodSaleRows,methodAttemptRows]=await Promise.all([
   loadDashboardMetricValues(database,project.id,30,filters).catch(()=>emptyValues),
   loadDashboardMetricValues(database,project.id,30,previousFilters).catch(()=>emptyValues),
   loadDashboardMetricSeries(database,project.id,30,filters).catch(()=>emptySeries),
@@ -106,6 +107,35 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
     where event.project_id=$1 and event.data_scope='production' and event.sale_financial_effect>0
      and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day'
     order by event.occurred_at desc limit 12`,[project.id,from,to,project.timezone]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{name:string;sales:number;revenue:string}>(`
+   select product.name,count(distinct event.payment_id)::int sales,
+     coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
+     from public.normalized_payment_events event
+     join public.commerce_order_items item on item.order_id=event.order_id
+     join public.commerce_products product on product.id=item.product_id
+    where event.project_id=$1 and event.data_scope='production' and event.sale_financial_effect>0
+     and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day'
+     and ($5::uuid[] is null or product.id=any($5))
+    group by product.name order by sales desc`,[project.id,from,to,project.timezone,selectedProducts.length?selectedProducts:null]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{method:string|null;sales:number;revenue:string}>(`
+   select payment.method,count(distinct event.payment_id)::int sales,
+     coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
+     from public.normalized_payment_events event
+     join public.payments payment on payment.id=event.payment_id
+    where event.project_id=$1 and event.data_scope='production' and event.sale_financial_effect>0
+     and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day'
+     and ($5::uuid[] is null or exists(select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($5)))
+    group by payment.method order by sales desc`,[project.id,from,to,project.timezone,selectedProducts.length?selectedProducts:null]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{method:string|null;approved:number;concluded:number}>(`
+   select payment.method,
+     count(*) filter(where payment.status='approved')::int approved,
+     count(*) filter(where payment.status in ('approved','failed','expired','cancelled'))::int concluded
+     from public.payments payment
+     join public.commerce_orders ord on ord.id=payment.order_id
+    where ord.project_id=$1 and ord.data_scope='production'
+     and (ord.occurred_at at time zone $4)>=$2::date and (ord.occurred_at at time zone $4)<$3::date+interval '1 day'
+     and ($5::uuid[] is null or exists(select 1 from public.commerce_order_items item where item.order_id=ord.id and item.product_id=any($5)))
+    group by payment.method`,[project.id,from,to,project.timezone,selectedProducts.length?selectedProducts:null]).then(r=>r.rows).catch(()=>[]),
  ]);
  const salesByAd=new Map<string,{sales:number;revenue:number}>();const organic={sales:0,revenue:0};
  for(const row of adSalesUtm){const adId=extractAdId(row.utm_content);if(!adId){organic.sales+=row.sales;organic.revenue+=Number(row.revenue);continue}const current=salesByAd.get(adId)??{sales:0,revenue:0};current.sales+=row.sales;current.revenue+=Number(row.revenue);salesByAd.set(adId,current)}
@@ -117,7 +147,10 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
  const regions=[...regionMap.entries()].map(([uf,value])=>({uf,name:UF_NAMES[uf]??uf,sales:value.sales,revenue:value.revenue})).sort((a,b)=>b.sales-a.sales);
  const regionData=Object.fromEntries(regions.map(row=>[row.uf,{sales:row.sales,revenue:row.revenue}]));
  const recentSales=recentSaleRows.map(row=>({occurredAt:row.occurred_at,amount:Number(row.amount),product:row.product_name??"Produto",uf:dddToUf(row.phone)}));
- const intelligent={adPerformance,organic,regions,regionData,salesWithoutPhone,recentSales};
+ const productDonut=productApprovedRows.map(row=>({name:row.name,sales:row.sales,revenue:Number(row.revenue)}));
+ const methodSales=groupMethodSales(methodSaleRows.map(row=>({method:row.method,sales:row.sales,revenue:Number(row.revenue)})));
+ const methodApproval=groupMethodApproval(methodAttemptRows);
+ const intelligent={adPerformance,organic,regions,regionData,salesWithoutPhone,recentSales,productDonut,methodSales,methodApproval};
  return <main className="app-layout"><DashboardSidebar activeHref="/dashboard-v2" footerLabel="Dados conectados"/>
   <section className="app-content"><DashboardV2Client project={{id:project.id,name:project.name,currency:project.currency,timezone:project.timezone}}
    filters={{from,to,account:query.account??"",product:selectedProducts.join(","),channel:query.channel??"",medium:query.medium??"",offer:query.offer??"",payment_method:query.payment_method??"",payment_status:query.payment_status??"",buyer:buyerSegment??"",compare:query.compare??"previous",basis:revenueBasis}}

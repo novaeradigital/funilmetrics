@@ -1,7 +1,7 @@
 "use client";
 import {useMemo,useRef,useState,useTransition} from "react";
 import {useRouter} from "next/navigation";
-import {Area,Bar,CartesianGrid,ComposedChart,Legend,Line,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
+import {Area,Bar,CartesianGrid,Cell,ComposedChart,Legend,Line,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {GridLayout,useContainerWidth,type Layout,type LayoutItem} from "react-grid-layout";
 import type {DashboardMetricSeries,DashboardMetricValues} from "../../lib/dashboard-metric-values";
 import {queueDashboardMetaSync,saveDashboardV2Layout,saveDashboardV2Template} from "./actions";
@@ -13,13 +13,16 @@ type Ranked={name:string;value:number;amount?:number};
 type AdPerformanceRow={adId:string;name:string;campaign:string;sales:number;revenue:number;spend:number;impressions:number;linkClicks:number};
 type RegionRow={uf:string;name:string;sales:number;revenue:number};
 type RecentSaleRow={occurredAt:string;amount:number;product:string;uf:string|null};
-type IntelligentData={adPerformance:AdPerformanceRow[];organic:{sales:number;revenue:number};regions:RegionRow[];regionData:Record<string,{sales:number;revenue:number}>;salesWithoutPhone:number;recentSales:RecentSaleRow[]};
+type ProductSaleRow={name:string;sales:number;revenue:number};
+type MethodSalesGroup={key:string;label:string;sales:number;revenue:number};
+type MethodApprovalGroup={key:string;label:string;approved:number;concluded:number;rate:number|null};
+type IntelligentData={adPerformance:AdPerformanceRow[];organic:{sales:number;revenue:number};regions:RegionRow[];regionData:Record<string,{sales:number;revenue:number}>;salesWithoutPhone:number;recentSales:RecentSaleRow[];productDonut:ProductSaleRow[];methodSales:MethodSalesGroup[];methodApproval:MethodApprovalGroup[]};
 type Filters={from:string;to:string;account:string;product:string;channel:string;medium:string;offer:string;payment_method:string;payment_status:string;buyer:string;compare:string;basis:"producer_commission"|"sale_total"};
 type WidgetConfig={title:string;description:string;granularity:"daily"|"weekly"|"monthly";comparison:"previous"|"none";metrics:string[];legend:boolean;tooltip:boolean;chartType:"composed"|"bars"|"lines";sort:"desc"|"asc";limit:number;primaryColor:string;secondaryColor:string};
 type SavedWidget={instanceId:string;kind:string;title:string;config:Partial<WidgetConfig>;grid_x:number;grid_y:number;grid_width:number;grid_height:number;display_order:number};
 type TemplateWidget={id:string;kind:string;gridWidth:number;gridHeight:number;gridX:number;gridY:number;config?:Partial<WidgetConfig>};
 type SavedTemplate={id:string;name:string;definition:{version?:number;source?:string;widgets?:TemplateWidget[]};createdAt:string};
-type WidgetKind="kpi_revenue"|"kpi_net_revenue"|"kpi_ticket"|"kpi_cpa"|"kpi_spend"|"kpi_profit"|"kpi_roas"|"financial_health"|"financial_chart"|"product_sales"|"account_spend"|"channel_sales"|"hour_sales"|"conversion_funnel"|"region_sales"|"ad_performance"|"recent_sales";
+type WidgetKind="kpi_revenue"|"kpi_net_revenue"|"kpi_ticket"|"kpi_cpa"|"kpi_spend"|"kpi_profit"|"kpi_roas"|"financial_health"|"financial_chart"|"product_sales"|"account_spend"|"channel_sales"|"hour_sales"|"conversion_funnel"|"region_sales"|"ad_performance"|"recent_sales"|"product_sales_donut"|"payment_method_sales"|"payment_method_approval"|"sales_table";
 type Definition={kind:WidgetKind;title:string;description:string;category:"Principais"|"Gráficos";w:number;h:number;minW:number;minH:number;maxH:number};
 
 const presets=[["Hoje",0],["Ontem",1],["Últimos 7 dias",7],["Últimos 14 dias",14],["Últimos 30 dias",30],["Este mês",-1],["Mês passado",-2]] as const;
@@ -42,6 +45,10 @@ const catalog:Definition[]=[
  {kind:"recent_sales",title:"Vendas recentes",description:"Últimas vendas aprovadas do período.",category:"Principais",w:3,h:4,minW:3,minH:3,maxH:8},
  {kind:"region_sales",title:"Vendas por região",description:"Mapa e ranking por UF, estimados pelo DDD do comprador.",category:"Gráficos",w:6,h:5,minW:4,minH:4,maxH:10},
  {kind:"ad_performance",title:"Performance por anúncio",description:"Vendas, receita e gasto por anúncio, cruzados pelo ID do anúncio.",category:"Gráficos",w:12,h:5,minW:6,minH:4,maxH:12},
+ {kind:"product_sales_donut",title:"Vendas por produto (rosca)",description:"Participação de cada produto nas vendas aprovadas, em gráfico de rosca.",category:"Gráficos",w:4,h:4,minW:3,minH:3,maxH:8},
+ {kind:"payment_method_sales",title:"Vendas por método de pagamento",description:"Vendas aprovadas por Pix, cartão, boleto e outros, em gráfico de rosca.",category:"Gráficos",w:4,h:4,minW:3,minH:3,maxH:8},
+ {kind:"payment_method_approval",title:"Aprovação por método de pagamento",description:"Percentual de pagamentos aprovados sobre os concluídos, por método.",category:"Gráficos",w:4,h:4,minW:3,minH:3,maxH:8},
+ {kind:"sales_table",title:"Tabela de vendas",description:"Vendas aprovadas e receita por produto, em tabela.",category:"Gráficos",w:6,h:4,minW:4,minH:3,maxH:10},
 ];
 const defaultKinds:WidgetKind[]=["kpi_revenue","kpi_spend","kpi_profit","kpi_roas","financial_chart","product_sales","account_spend","channel_sales","hour_sales","conversion_funnel"];
 const widgetResizeHandles:NonNullable<LayoutItem["resizeHandles"]>=["n","e","s","w","ne","nw","se","sw"];
@@ -61,6 +68,25 @@ function financialRows(series:DashboardMetricSeries,granularity:WidgetConfig["gr
 
 function Ranking({items,currency,config}:{items:Ranked[];currency?:string;config:WidgetConfig}){const ordered=[...items].sort((a,b)=>config.sort==="asc"?a.value-b.value:b.value-a.value).slice(0,config.limit),max=Math.max(...ordered.map(item=>item.value),1);return <div className="v2-ranking">{ordered.length?ordered.map(item=><div key={item.name}><span title={item.name}>{item.name}</span><i><b style={{width:`${Math.max(3,item.value/max*100)}%`,background:config.primaryColor}}/></i><strong>{currency?money(item.amount??item.value,currency):item.value}</strong></div>):<p>Dado indisponível</p>}</div>}
 
+const donutPalette=["#24d689","#5b8def","#f5b544","#ef5b7a","#9b7bea","#4cc3d9","#e2725b","#a3a3ad"];
+function Donut({items,centerLabel,config}:{items:{name:string;value:number;amount?:number}[];centerLabel:string;config:WidgetConfig}){
+ const ordered=[...items].filter(item=>item.value>0).sort((a,b)=>config.sort==="asc"?a.value-b.value:b.value-a.value);
+ const top=ordered.slice(0,config.limit),rest=ordered.slice(config.limit);
+ const slices=rest.length?[...top,{name:"Outros",value:rest.reduce((sum,item)=>sum+item.value,0),amount:rest.reduce((sum,item)=>sum+(item.amount??0),0)}]:top;
+ const total=slices.reduce((sum,item)=>sum+item.value,0);
+ if(!total)return <p className="v2-empty">Sem vendas aprovadas no período.</p>;
+ return <div className="v2-donut"><div className="v2-donut-chart"><ResponsiveContainer width="100%" height="100%"><PieChart><Tooltip contentStyle={{background:"#111113",border:"1px solid #26262b",borderRadius:10}} formatter={(value,name)=>[Number(value).toLocaleString("pt-BR"),String(name)]}/><Pie data={slices} dataKey="value" nameKey="name" innerRadius="70%" outerRadius="95%" paddingAngle={2} stroke="none">{slices.map((item,index)=><Cell key={item.name} fill={donutPalette[index%donutPalette.length]}/>)}</Pie></PieChart></ResponsiveContainer><div className="v2-donut-center"><strong>{total.toLocaleString("pt-BR")}</strong><span>{centerLabel}</span></div></div><div className="v2-donut-legend">{slices.map((item,index)=><div key={item.name}><i style={{background:donutPalette[index%donutPalette.length]}}/><span title={item.name}>{item.name}</span><b>{item.value.toLocaleString("pt-BR")}</b><small>{(item.value/total*100).toFixed(1).replace(".",",")}%</small></div>)}</div></div>;
+}
+function ApprovalRings({items}:{items:MethodApprovalGroup[]}){
+ if(!items.length)return <p className="v2-empty">Sem pagamentos concluídos no período.</p>;
+ const colors:Record<string,string>={pix:"#24d689",card:"#5b8def",boleto:"#f5b544",other:"#8e8e93"};
+ return <div className="v2-approval">{items.map(item=>{const r=26,c=2*Math.PI*r,pct=item.rate??0;return <div className="v2-approval-item" key={item.key}><div className="v2-approval-ring"><svg width="72" height="72"><circle cx="36" cy="36" r={r} fill="none" stroke="#222225" strokeWidth="7"/><circle cx="36" cy="36" r={r} fill="none" stroke={colors[item.key]??"#8e8e93"} strokeWidth="7" strokeLinecap="round" strokeDasharray={`${c*pct/100} ${c}`}/></svg><b>{item.rate===null?"N/A":`${item.rate.toFixed(0)}%`}</b></div><span>{item.label}</span><small>{item.approved} de {item.concluded} concluídos</small></div>})}</div>;
+}
+function SalesTable({items,currency,config}:{items:ProductSaleRow[];currency:string;config:WidgetConfig}){
+ const ordered=[...items].sort((a,b)=>config.sort==="asc"?a.revenue-b.revenue:b.revenue-a.revenue).slice(0,config.limit);
+ if(!ordered.length)return <p className="v2-empty">Sem vendas aprovadas no período.</p>;
+ return <div className="di-table-wrap"><table className="v2-sales-table"><thead><tr><th>Produto</th><th className="num">Vendas aprovadas</th><th className="num">Receita</th></tr></thead><tbody>{ordered.map(item=><tr key={item.name}><td>{item.name}</td><td className="num">{item.sales.toLocaleString("pt-BR")}</td><td className="num">{money(item.revenue,currency)}</td></tr>)}</tbody></table></div>;
+}
 function ProductMultiSelect({items,value,onChange}:{items:Option[];value:string;onChange:(value:string)=>void}){
  const selected=value.split(",").filter(Boolean),selectedSet=new Set(selected);
  const label=selected.length===0?"Todos os produtos":selected.length===1?(items.find(item=>item.id===selected[0])?.name??"1 produto"):`${selected.length} produtos selecionados`;
@@ -130,6 +156,10 @@ export function DashboardV2Client({project,filters,accounts,products,advancedOpt
   if(kind==="conversion_funnel"){const labels:Record<string,string>={meta_impressions:"Impressões",meta_link_clicks:"Cliques no link",meta_landing_page_views:"Visualizações da página",meta_view_content:"Visualizações de conteúdo",meta_add_to_cart:"Adições ao carrinho",meta_initiate_checkout:"Checkouts iniciados",pending_payments:"Pagamentos pendentes",approved_payments:"Vendas aprovadas",gross_revenue:"Faturamento"},values:Record<string,DashboardMetricValues[string]>={meta_impressions:metrics.meta_impressions??unavailable,meta_link_clicks:metrics.meta_link_clicks??unavailable,meta_landing_page_views:metrics.meta_landing_page_views??unavailable,meta_view_content:metrics.meta_view_content??unavailable,meta_add_to_cart:metrics.meta_add_to_cart??unavailable,meta_initiate_checkout:metrics.meta_initiate_checkout??unavailable,pending_payments:metrics.pending_payments??unavailable,approved_payments:approved,gross_revenue:revenue};return <div className="v2-funnel">{config.metrics.map((metric,index)=>{const current=values[metric]??unavailable,previous=index?values[config.metrics[index-1]!]??unavailable:null,rate=current.available&&previous?.available&&previous.value>0?current.value/previous.value*100:null;return <div key={metric} style={{width:`${100-index*Math.min(12,55/Math.max(config.metrics.length-1,1))}%`}}><strong>{labels[metric]??metric}</strong><span>{current.available?(metric==="gross_revenue"?money(current.value,project.currency):current.value.toLocaleString("pt-BR")):"Dado indisponível"}</span>{rate===null?null:<small>{rate.toFixed(1).replace(".",",")}% da etapa anterior</small>}</div>})}</div>}
    if(kind==="region_sales"){return intelligent.regions.length?<div className="v2-region"><div className="v2-region-map"><BrazilMap data={intelligent.regionData} money={new Intl.NumberFormat("pt-BR",{style:"currency",currency:project.currency})}/></div><Ranking items={intelligent.regions.map(row=>({name:`${row.uf} · ${row.name}`,value:row.sales,amount:row.revenue}))} currency={project.currency} config={config}/>{intelligent.salesWithoutPhone?<p className="v2-region-note">{intelligent.salesWithoutPhone} venda(s) sem telefone identificado ficaram fora do mapa.</p>:null}</div>:<p className="v2-empty">Sem vendas com telefone identificado no período.</p>}
   if(kind==="ad_performance"){const rows=intelligent.adPerformance;if(!rows.length&&!intelligent.organic.sales)return <p className="v2-empty">Nada para cruzar neste período: sem vendas atribuídas e sem insights da Meta.</p>;return <div className="di-table-wrap v2-ad-wrap"><table className="di-table v2-ad-table"><thead><tr><th>Anúncio</th><th>Campanha</th><th>Vendas</th><th>Receita</th><th>Gasto</th><th>ROAS</th><th>CPA</th><th>Impressões</th><th>Cliques no link</th><th>CTR</th><th>CPC</th></tr></thead><tbody>{rows.map(row=>{const roas=row.spend>0?row.revenue/row.spend:null,cpa=row.sales>0?row.spend/row.sales:null,ctr=row.impressions>0?row.linkClicks/row.impressions*100:null,cpc=row.linkClicks>0?row.spend/row.linkClicks:null;return <tr key={row.adId}><td><strong>{row.name}</strong><small>{row.adId}</small></td><td>{row.campaign}</td><td>{row.sales}</td><td>{money(row.revenue,project.currency)}</td><td>{money(row.spend,project.currency)}</td><td className={roas===null?"":roas>=1?"tone-up":"tone-down"}>{roas===null?"—":`${roas.toFixed(2).replace(".",",")}x`}</td><td>{cpa===null?"—":money(cpa,project.currency)}</td><td>{row.impressions.toLocaleString("pt-BR")}</td><td>{row.linkClicks.toLocaleString("pt-BR")}</td><td>{ctr===null?"—":`${ctr.toFixed(2).replace(".",",")}%`}</td><td>{cpc===null?"—":money(cpc,project.currency)}</td></tr>})}{intelligent.organic.sales>0?<tr className="di-organic-row"><td><strong>Orgânico / sem anúncio</strong><small>sem utm_content com ID</small></td><td>—</td><td>{intelligent.organic.sales}</td><td>{money(intelligent.organic.revenue,project.currency)}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>:null}</tbody></table></div>}
+  if(kind==="product_sales_donut")return <Donut items={intelligent.productDonut.map(row=>({name:row.name,value:row.sales,amount:row.revenue}))} centerLabel="vendas" config={config}/>;
+  if(kind==="payment_method_sales")return <Donut items={intelligent.methodSales.map(row=>({name:row.label,value:row.sales,amount:row.revenue}))} centerLabel="vendas" config={config}/>;
+  if(kind==="payment_method_approval")return <ApprovalRings items={intelligent.methodApproval}/>;
+  if(kind==="sales_table")return <SalesTable items={intelligent.productDonut} currency={project.currency} config={config}/>;
   if(kind==="recent_sales"){if(!intelligent.recentSales.length)return <p className="v2-empty">Nenhuma venda aprovada no período.</p>;return <ul className="di-feed v2-feed">{intelligent.recentSales.map((sale,index)=>{const when=new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",timeZone:project.timezone}).format(new Date(sale.occurredAt));return <li key={index}><div><strong>{sale.product}</strong><small>{when}{sale.uf?` · ${sale.uf}`:""}</small></div><span className="di-feed-value">+{money(sale.amount,project.currency)}</span></li>})}</ul>}
  const max=Math.max(...rankings.hours.map(x=>x.value),1);return <div className="v2-hours">{Array.from({length:24},(_,hour)=>{const value=rankings.hours.find(x=>Number(x.name)===hour)?.value??0;return <span title={`${String(hour).padStart(2,"0")}h: ${value}`} style={{opacity:.16+.84*value/max}} key={hour}/>})}</div>;
  }
@@ -154,7 +184,7 @@ export function DashboardV2Client({project,filters,accounts,products,advancedOpt
 
 function WidgetConfigDialog({kind,value,onClose,onApply}:{kind:WidgetKind;value:WidgetConfig;onClose:()=>void;onApply:(value:WidgetConfig)=>void}){
  const [draft,setDraft]=useState(value),metrics=[{key:"meta_impressions",label:"Impressões"},{key:"meta_link_clicks",label:"Cliques no link"},{key:"meta_landing_page_views",label:"Visualizações da página de destino"},{key:"meta_view_content",label:"Visualizações de conteúdo"},{key:"meta_add_to_cart",label:"Adições ao carrinho"},{key:"meta_initiate_checkout",label:"Checkouts iniciados"},{key:"pending_payments",label:"Pagamentos pendentes"},{key:"approved_payments",label:"Vendas aprovadas"},{key:"gross_revenue",label:"Faturamento"}];
- const ranking=["product_sales","account_spend","channel_sales"].includes(kind);
+ const ranking=["product_sales","account_spend","channel_sales","product_sales_donut","payment_method_sales","sales_table"].includes(kind);
  return <div className="v2-config-backdrop" onClick={onClose}><section className="v2-config-modal" onClick={event=>event.stopPropagation()}>
   <header><div><strong>Editar widget</strong><small>Configuração governada</small></div><button onClick={onClose}>×</button></header>
   <label>Título<input value={draft.title} maxLength={120} onChange={event=>setDraft({...draft,title:event.target.value})}/></label>

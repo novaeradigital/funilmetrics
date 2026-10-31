@@ -2062,3 +2062,19 @@ correcao do identificador de pagamento (pedido do gateway no lugar da
 coluna vazia) fechou 18 vendas aprovadas e R$ 5.062,91, identicos ao
 checkout.
 
+## D-144 - Quatro blocos novos no Meus dashboards: roscas, aprovacao e tabela
+
+Pedido do Fabio a partir de referencias de outra ferramenta: vendas por
+produto em grafico de rosca, vendas por metodo de pagamento em rosca,
+aprovacao por metodo de pagamento em aneis e tabela de vendas. Os quatro
+nascem como kinds do dashboard-v2 (product_sales_donut,
+payment_method_sales, payment_method_approval, sales_table), entram no
+catalogo do Personalizar layout e na lista permitida do servidor, entao
+podem ser inseridos, removidos, arrastados e redimensionados como
+qualquer bloco. As roscas e a tabela usam vendas aprovadas governadas
+(eventos normalizados com efeito de venda), diferentes do ranking antigo
+de produto, que conta pedidos de qualquer estado. Os metodos crus das
+fontes sao agrupados em Pix, Cartao, Boleto e Outros pela biblioteca
+payment-methods. O recorte por kit (1x, 3x, 5x) da referencia fica para
+uma segunda leva: hoje o kit so existe no payload bruto da fonte.
+

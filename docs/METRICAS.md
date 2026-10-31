@@ -52,3 +52,15 @@ compara com a janela imediatamente anterior de mesma duração.
   de `link_click` resulta em indisponível, nunca zero fabricado.
 - **Participação regional:** vendas da UF / total de vendas do período,
   com UF estimada pelo DDD do telefone do comprador (ver D-137).
+
+## Taxa de aprovacao por metodo de pagamento
+
+Pagamentos aprovados do metodo divididos pelos pagamentos concluidos
+do metodo no periodo. Concluido e o pagamento que chegou a um desfecho:
+aprovado, recusado (failed), expirado ou cancelado. Pendente e em
+analise ficam fora dos dois lados da divisao. Sem nenhum pagamento
+concluido no periodo, a taxa e indisponivel e o bloco mostra N/A, nunca
+zero. Os metodos crus das fontes sao agrupados em Pix, Cartao, Boleto e
+Outros. Por isso o Pix tende a mostrar taxa menor que o cartao: o PIX
+gerado e nao pago entra como concluido nao aprovado.
+
