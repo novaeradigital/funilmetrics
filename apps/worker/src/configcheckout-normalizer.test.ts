@@ -144,3 +144,38 @@ describe("normalizeConfigCheckoutEvent", () => {
     ).toThrow(ConfigCheckoutNormalizationBlocked);
   });
 });
+
+
+describe("tipos normalizados dentro do enum do banco", () => {
+  const tiposPermitidos = [
+    "checkout_abandoned",
+    "payment_pending",
+    "payment_approved",
+    "payment_request_expired",
+    "payment_request_cancelled",
+    "refund_requested",
+    "payment_refunded",
+    "payment_chargeback",
+  ];
+
+  it.each([
+    ["order.created", "payment_pending"],
+    ["payment.confirmed", "payment_approved"],
+    ["payment.analysis", "payment_pending"],
+    ["payment.failed", "payment_pending"],
+    ["order.canceled", "payment_request_cancelled"],
+    ["order.refunded", "payment_refunded"],
+    ["order.chargeback", "payment_chargeback"],
+  ])("%s normaliza para %s", (tipoFonte, tipoEsperado) => {
+    const result = normalizeConfigCheckoutEvent({
+      rawEventId: "raw-tipos",
+      externalEventId: "evt-tipos",
+      idempotencyKey: "key-tipos",
+      receivedAt: new Date("2026-10-30T12:15:00Z"),
+      body: envelope({ type: tipoFonte }),
+    });
+
+    expect(tiposPermitidos).toContain(result.normalizedType);
+    expect(result.normalizedType).toBe(tipoEsperado);
+  });
+});

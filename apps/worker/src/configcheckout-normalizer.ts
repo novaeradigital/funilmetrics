@@ -1,4 +1,4 @@
-export const configCheckoutRuleVersion = "configcheckout-normalization-v1";
+export const configCheckoutRuleVersion = "configcheckout-normalization-v2";
 
 const eventMapping = {
   "order.created": {
@@ -14,19 +14,19 @@ const eventMapping = {
     effect: "approve",
   },
   "payment.analysis": {
-    type: "payment_analysis",
+    type: "payment_pending",
     orderStatus: "in_analysis",
     paymentStatus: "in_analysis",
     effect: "none",
   },
   "payment.failed": {
-    type: "payment_failed",
+    type: "payment_pending",
     orderStatus: "failed",
     paymentStatus: "failed",
     effect: "none",
   },
   "order.canceled": {
-    type: "payment_cancelled",
+    type: "payment_request_cancelled",
     orderStatus: "cancelled",
     paymentStatus: "cancelled",
     effect: "none",

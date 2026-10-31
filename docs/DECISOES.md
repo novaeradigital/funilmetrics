@@ -2044,3 +2044,21 @@ O editor persiste e aplica configurações por instância, incluindo granularida
   entre hub e páginas pelo módulo `integracoes/shared.tsx`, que concentra
   o carregamento de contexto, o casco da página e o formulário de
   credenciais.
+
+## D-143 - Tipos normalizados da fonte ConfigCheckout dentro do enum compartilhado
+
+A primeira importacao historica da fonte ConfigCheckout (D-141) aprovou os
+pagamentos mas deixou os eventos de cancelamento em quarentena: o mapa do
+normalizador usava nomes de tipo que nao existem no enum
+normalized_event_type (payment_cancelled, payment_analysis, payment_failed),
+e cada evento falhava na gravacao ate esgotar as tentativas. Correcao: o
+cancelamento usa payment_request_cancelled; analise e recusa usam
+payment_pending com os status in_analysis e failed (valores que a migration
+da D-141 ja tinha criado nos enums de status), preservando o nome original
+do evento em external_event_name. A versao da regra sobe para
+configcheckout-normalization-v2 e um teste de guarda novo confere cada tipo
+emitido contra a lista do enum. Na mesma leva, a importacao refeita apos a
+correcao do identificador de pagamento (pedido do gateway no lugar da
+coluna vazia) fechou 18 vendas aprovadas e R$ 5.062,91, identicos ao
+checkout.
+
