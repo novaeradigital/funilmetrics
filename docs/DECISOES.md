@@ -2178,3 +2178,16 @@ produto selecionado. O rodape do cartao de investimento, quando nao
 ha gasto no periodo, diz "Sem gasto no periodo" em vez de
 "Conversao pendente".
 
+## D-152 - Comportamento dos filtros do Meus dashboards
+
+Os seletores de filtro (contas, produtos, periodo e filtros
+comerciais avancados) abriam e so fechavam clicando no mesmo
+lugar, e toda mudanca exigia clicar em Atualizar. Agora: qualquer
+painel de filtro fecha ao clicar fora dele ou com Escape; os
+seletores simples (comparacao, canal, base, oferta, midia, metodo,
+status e comprador) aplicam na hora ao mudar; as selecoes multiplas
+de contas e produtos aplicam sozinhas quando o painel fecha, se a
+selecao mudou. O botao Atualizar continua existindo como
+atualizacao manual, e o periodo personalizado segue com o botao
+Aplicar periodo.
+
