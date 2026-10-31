@@ -57,7 +57,14 @@ export default async function IntegrationsPage({
 
   const metaConnections = [...byProvider.values()].filter((item) => item.provider === "meta_ads");
   const metaApp = byProvider.get("meta_ads_app");
-  const metaStatus = metaConnections.length
+  const metaExpired = ((await database.pool.query<{ total: number }>(
+    `select count(*)::int as total from public.meta_authorizations
+      where project_id=$1 and status='expired'`,
+    [scope.project_id],
+  )).rows[0]?.total ?? 0) > 0;
+  const metaStatus = metaExpired
+    ? { status: "Autorização expirada, reconectar", active: false }
+    : metaConnections.length
     ? { status: `${metaConnections.length} conexão(ões) ativa(s)`, active: true }
     : metaApp?.has_secret
       ? { status: "App configurado · sem conexão", active: true }
@@ -90,8 +97,8 @@ export default async function IntegrationsPage({
       href: "/dashboard/integracoes/meta",
       status: metaStatus.status,
       active: metaStatus.active,
-      detail: "OAuth do cliente, usuário do sistema, sincronização e catálogo autorizado.",
-      cta: "Gerenciar",
+      detail: metaExpired ? "A autorização venceu e a sincronização parou. Reconecte para retomar." : "OAuth do cliente, usuário do sistema, sincronização e catálogo autorizado.",
+      cta: metaExpired ? "Reconectar" : "Gerenciar",
     },
   ];
   const criativos: HubCard[] = [

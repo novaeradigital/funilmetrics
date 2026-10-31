@@ -8,6 +8,7 @@ import {DashboardSidebar} from "../dashboard/dashboard-sidebar";
 import {calendarDateInTimeZone,shiftCalendarDate} from "../../lib/calendar-date";
 import {dddToUf,extractAdId} from "../../lib/dashboard-inteligente";
 import {groupMethodApproval,groupMethodSales} from "../../lib/payment-methods";
+import {queueMetaSyncIfStale} from "../../lib/meta-sync-queue";
 import {UF_NAMES} from "../dashboard/dashboard-inteligente/brazil-map-data";
 
 type Search={from?:string;to?:string;account?:string;product?:string|string[];channel?:string;medium?:string;offer?:string;payment_method?:string;payment_status?:string;buyer?:string;compare?:string;basis?:string};
@@ -27,6 +28,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
  if(!data.user)redirect("/login");
  const context=await getActiveProject(data.user.id);if(!context.project)redirect("/dashboard/projetos");
  const project=context.project,database=getDatabase();
+ await queueMetaSyncIfStale(database.pool,{organizationId:project.organization_id,projectId:project.id,authUserId:data.user.id}).catch(()=>0);
  const today=calendarDateInTimeZone(new Date(),project.timezone);
  const to=validDate(query.to)??today;
  const from=validDate(query.from)??shiftCalendarDate(today,-29);

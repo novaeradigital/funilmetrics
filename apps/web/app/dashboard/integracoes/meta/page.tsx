@@ -12,6 +12,8 @@ import {
   loadIntegrationContext,
 } from "../shared";
 
+import Link from "next/link";
+
 export const dynamic = "force-dynamic";
 
 type MetaCatalogRow = {
@@ -138,9 +140,17 @@ export default async function MetaPage({
     )
   ).rows;
 
+  const metaAuthorizations = (await database.pool.query<{ mode: string; status: string; token_expires_at: Date | null }>(
+    `select mode::text as mode, status::text as status, token_expires_at
+       from public.meta_authorizations where project_id=$1`,
+    [scope.project_id],
+  )).rows;
+  const metaAuthExpired = metaAuthorizations.some((item) => item.status === "expired" || (item.mode === "oauth_user" && item.token_expires_at !== null && item.token_expires_at.getTime() < Date.now()));
+
   return (
     <PlatformShell eyebrow="Anúncios e catálogo" status={query.status} title="Meta Ads" vaultReady={vaultReady}>
       <p className="dashboard-context">Credenciais do aplicativo e do usuário do sistema, conexões do projeto, sincronização e catálogo autorizado.</p>
+      {metaAuthExpired ? <div className="notice notice-error">A autorização da Meta expirou ou foi revogada e a sincronização parou. <Link href={`/dashboard/integracoes/meta/connect?projectId=${scope.project_id}`}>Reconectar com o Facebook</Link> para autorizar de novo e retomar a sincronização.</div> : null}
       <section className="integration-config-grid">
         <IntegrationForm provider="meta_ads_app" title="Meta OAuth" projectId={scope.project_id} current={metaAppConfig} disabled={!vaultReady || !canEdit} />
         <IntegrationForm provider="meta_ads" title="Meta · usuário do sistema" projectId={scope.project_id} current={metaSystemConfig} disabled={!vaultReady || !canEdit} />

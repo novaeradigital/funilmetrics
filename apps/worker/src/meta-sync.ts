@@ -1,5 +1,6 @@
 import type pg from "pg";
 import {loadMetaConnectionAccessToken} from "./integration-credentials.js";
+import {markMetaAuthorizationExpired,refreshMetaOAuthTokenIfNeeded} from "./meta-token.js";
 
 const graphVersion="v25.0";
 type Run={id:string;organization_id:string;project_id:string;connection_id:string;
@@ -112,6 +113,7 @@ function graphClient(token:string){
 }
 
 async function synchronize(pool:pg.Pool,run:Run){
+  await refreshMetaOAuthTokenIfNeeded(pool,{id:run.connection_id,projectId:run.project_id,organizationId:run.organization_id}).catch(()=>false);
   const token=await loadMetaConnectionAccessToken(pool,run.connection_id);
   if(!token)throw new Error("meta_configuration_missing");
   const allowlist=String(run.configuration.adAccountAllowlist??"")
@@ -451,13 +453,18 @@ export async function processMetaSync(pool:pg.Pool,maxAttempts:number){
   }catch(error){
     const canRetry=retryable(error)&&run.attempts<maxAttempts;
     const retryDelaySeconds=Math.min(3600,60*(2**Math.max(0,run.attempts-1)));
+    let finalErrorCode=errorCode(error);
+    if(finalErrorCode==="meta_http_401"){
+      const marked=await markMetaAuthorizationExpired(pool,run.connection_id).catch(()=>false);
+      if(marked)finalErrorCode="meta_token_expired";
+    }
     await pool.query(
       `update public.meta_sync_runs set status=$2,error_code=$3,
               finished_at=case when $2='failed_terminal' then now() else null end,
               next_attempt_at=case when $2='failed_retryable'
                 then now()+($4::text||' seconds')::interval else next_attempt_at end,
               updated_at=now() where id=$1`,
-      [run.id,canRetry?"failed_retryable":"failed_terminal",errorCode(error),
+      [run.id,canRetry?"failed_retryable":"failed_terminal",finalErrorCode,
        retryDelaySeconds],
     );
     return {

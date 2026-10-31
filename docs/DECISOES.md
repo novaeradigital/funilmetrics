@@ -2078,3 +2078,21 @@ fontes sao agrupados em Pix, Cartao, Boleto e Outros pela biblioteca
 payment-methods. O recorte por kit (1x, 3x, 5x) da referencia fica para
 uma segunda leva: hoje o kit so existe no payload bruto da fonte.
 
+## D-145 - Token da Meta renovavel, expiracao visivel e sync ao abrir o painel
+
+A auditoria da integracao Meta encontrou a conexao OAuth com o token
+vencido havia mais de um mes: a agenda horaria seguia criando execucoes
+que falhavam com 401, a autorizacao continuava marcada como ativa e
+nenhum aviso existia. Tres correcoes: (1) o worker renova o token OAuth
+do usuario pela troca fb_exchange_token quando faltam menos de 15 dias
+para vencer, gravando o novo segredo cifrado e a nova validade; (2) se
+uma sincronizacao recebe 401, a autorizacao e marcada como expirada, a
+execucao termina com o codigo meta_token_expired e a agenda para de
+criar execucoes para aquela conexao (ela so agenda autorizacoes
+ativas), enquanto a tela da Meta e o hub mostram o aviso com o botao de
+reconectar; (3) abrir o Meus dashboards ou o Dashboard Inteligente
+enfileira uma sincronizacao quando a ultima concluida tem mais de 15
+minutos, com a mesma trava anti-duplicidade do botao manual. A agenda
+de fundo continua existindo como garantia; o intervalo segue
+configuravel por conexao.
+
