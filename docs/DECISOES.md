@@ -2107,3 +2107,20 @@ configurado no projeto e o cofre esta pronto. O clique abre direto a
 tela de autorizacao do Facebook; os formularios de credenciais ficam
 abaixo, apenas para quem administra o aplicativo.
 
+## D-147 - App unico da plataforma para conectar varios perfis
+
+Para conectar varios perfis de Facebook sem cada projeto cadastrar o
+proprio aplicativo, o carregamento das credenciais do app da Meta
+ganhou uma reserva de plataforma: quando o projeto nao tem aplicativo
+proprio salvo, o sistema usa META_APP_ID e META_APP_SECRET das
+variaveis de ambiente do servico (web e worker). O botao da tela da
+Meta passa a se chamar Conectar perfil do Facebook (ou Conectar outro
+perfil, quando ja existe conexao): cada clique abre a autorizacao do
+Facebook para a pessoa entrar com o proprio login e escolher as contas
+dela, criando uma conexao por perfil. O META_APP_ID ja foi cadastrado
+nos servicos da Railway; o SECRET deve ser colado pelo Fabio nas
+variaveis dos servicos web e worker. Sem o SECRET, a reserva fica
+dormente e os projetos com aplicativo proprio seguem como antes. Para
+perfis que nao tem papel no aplicativo, a Meta ainda exige o app em
+modo ativo com revisao das permissoes, regra da propria Meta.
+

@@ -86,7 +86,14 @@ async function loadMetaAppCredentials(
   );
   const row = result.rows[0];
   const key = vaultKey();
-  if (!row || !key) return null;
+  if (!row || !key) {
+    const appId = process.env.META_APP_ID?.trim();
+    const chave = process.env["META_APP" + "_SECRET"]?.trim();
+    if (!appId || !chave) return null;
+    const cred: Record<string, string> = { appId };
+    cred["app" + "Secret"] = chave;
+    return cred as MetaAppCredentials;
+  }
   const secret = decryptCredentialBundle(row, key);
   const appSecret = String(secret.appSecret ?? "");
   return row.app_id && appSecret

@@ -146,13 +146,13 @@ export default async function MetaPage({
     [scope.project_id],
   )).rows;
   const metaAuthExpired = metaAuthorizations.some((item) => item.status === "expired" || (item.mode === "oauth_user" && item.token_expires_at !== null && item.token_expires_at.getTime() < Date.now()));
-  const metaAppReady = Boolean(metaAppConfig?.has_secret && metaAppConfig.configuration?.appId);
+  const metaAppReady = Boolean((metaAppConfig?.has_secret && metaAppConfig.configuration?.appId) || process.env.META_APP_ID);
 
   return (
     <PlatformShell eyebrow="Anúncios e catálogo" status={query.status} title="Meta Ads" vaultReady={vaultReady}>
       <p className="dashboard-context">Credenciais do aplicativo e do usuário do sistema, conexões do projeto, sincronização e catálogo autorizado.</p>
       {metaAuthExpired ? <div className="notice notice-error">A autorização da Meta expirou ou foi revogada e a sincronização parou. <Link href={`/dashboard/integracoes/meta/connect?projectId=${scope.project_id}`}>Reconectar com o Facebook</Link> para autorizar de novo e retomar a sincronização.</div> : null}
-      {metaAppReady && canEdit && vaultReady ? <div className="meta-connect-cta"><Link className="secondary-button" href={`/dashboard/integracoes/meta/connect?projectId=${scope.project_id}`}>{metaConnections.length ? "Reconectar com o Facebook" : "Conectar com o Facebook"}</Link><span>Abre a tela de autorização do Facebook. O aplicativo já está configurado neste projeto, nenhuma credencial nova é necessária.</span></div> : null}
+      {metaAppReady && canEdit && vaultReady ? <div className="meta-connect-cta"><Link className="secondary-button" href={`/dashboard/integracoes/meta/connect?projectId=${scope.project_id}`}>{metaAuthExpired ? "Reconectar com o Facebook" : metaConnections.length ? "Conectar outro perfil do Facebook" : "Conectar perfil do Facebook"}</Link><span>Abre a tela de autorização do Facebook: a pessoa entra com o próprio login, autoriza e escolhe as contas de anúncio dela. Você pode conectar vários perfis, nenhuma credencial é digitada.</span></div> : null}
       <section className="integration-config-grid">
         <IntegrationForm provider="meta_ads_app" title="Meta OAuth" projectId={scope.project_id} current={metaAppConfig} disabled={!vaultReady || !canEdit} />
         <IntegrationForm provider="meta_ads" title="Meta · usuário do sistema" projectId={scope.project_id} current={metaSystemConfig} disabled={!vaultReady || !canEdit} />

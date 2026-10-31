@@ -27,7 +27,11 @@ export async function loadMetaAppConfig(pool:Pool,projectId:string){
     [projectId],
   );
   const row=result.rows[0], key=loadIntegrationVaultKey();
-  if(!row||!key) return null;
+  if(!row||!key){
+    const appId=process.env.META_APP_ID?.trim();
+    const appSecret=process.env["META_APP"+"_SECRET"]?.trim();
+    return appId&&appSecret?{appId,appSecret}:null;
+  }
   const secret=decryptIntegrationSecret({
     ciphertext:row.ciphertext,initializationVector:row.initialization_vector,
     authenticationTag:row.authentication_tag,
