@@ -6242,47 +6242,5 @@ body:has(.manager-column-resizer:active){cursor:col-resize;user-select:none}
 .v2-ad-wrap { overflow: auto; height: 100%; }
 .v2-ad-table { font-size: 0.8rem; }
 .v2-feed { overflow: auto; height: 100%; }
-
-/* Hub de Integrações: grade de plataformas (D-142) */
-.integration-hub-grid{display:grid;gap:.85rem;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));margin-top:.5rem}
-.integration-hub-card{background:#151829;border:1px solid var(--fm-border);border-radius:.7rem;color:inherit;display:grid;gap:.4rem;padding:1.05rem;text-decoration:none;transition:border-color .15s ease,transform .15s ease}
-.integration-hub-card:hover{border-color:#3d4266;transform:translateY(-2px)}
-.integration-hub-head{align-items:flex-start;display:flex;justify-content:space-between}
-.integration-logo{align-items:center;border-radius:.65rem;color:#fff;display:inline-flex;height:2.75rem;justify-content:center;width:2.75rem}
-.integration-logo svg{height:1.45rem;width:1.45rem}
-.integration-logo-lastlink{background:#6d28d9}
-.integration-logo-configcheckout{background:#24d689;color:#0a2e1f}
-.integration-logo-meta{background:linear-gradient(135deg,#0082fb,#0064e0)}
-.integration-logo-google_drive{background:#188038}
-.integration-logo-openai{background:#0d0d0f;border:1px solid #2c2c31}
-.integration-logo-cloudflare_r2{background:#e8590c}
-.integration-logo-clamav{background:#c0272d}
-.integration-logo-railway{background:#0b0d0e;border:1px solid #2c2c31}
-.integration-logo-cloudflare{background:#f6821f}
-.integration-hub-category{color:#85899c;font-size:.62rem;letter-spacing:.08em;margin:0;text-transform:uppercase}
-.integration-hub-name{color:#f4f2f8;font-size:1.02rem}
-.integration-hub-status{color:#c9cbd5;font-size:.74rem;margin:0}
-.integration-hub-card small{color:#85899c;font-size:.66rem;line-height:1.45}
-.integration-hub-cta{color:#24d689;font-size:.72rem;font-weight:600;margin-top:.3rem}
-.integration-back-link{color:#aa79ff;display:inline-block;font-size:.74rem;margin-bottom:.35rem;text-decoration:none}
-.integration-back-link:hover{text-decoration:underline}
-
-/* Hub de Integrações v2: busca, categorias e seções (D-142) */
-.integration-hub-tools{display:grid;gap:.7rem;margin:.4rem 0 1.1rem}
-.integration-search{align-items:center;background:#101223;border:1px solid var(--fm-border);border-radius:.6rem;color:#85899c;display:flex;gap:.55rem;max-width:34rem;padding:.55rem .8rem}
-.integration-search svg{flex:0 0 auto;height:1rem;width:1rem}
-.integration-search input{background:transparent;border:0;color:#f4f2f8;flex:1;font:inherit;font-size:.82rem;outline:none}
-.integration-search input::placeholder{color:#697080}
-.integration-chips{display:flex;flex-wrap:wrap;gap:.45rem}
-.integration-chip{background:#151829;border:1px solid var(--fm-border);border-radius:999px;color:#c9cbd5;cursor:pointer;font:inherit;font-size:.72rem;padding:.38rem .8rem}
-.integration-chip:hover{border-color:#3d4266}
-.integration-chip.is-active{background:#24d689;border-color:#24d689;color:#0a2e1f;font-weight:700}
-.integration-group{margin-bottom:1.4rem}
-.integration-group-head{margin-bottom:.7rem}
-.integration-group-head h2{color:#f4f2f8;font-size:1.02rem;margin:0}
-.integration-group-head p{color:#85899c;font-size:.74rem;margin:.2rem 0 0}
-.integration-hub-grid{margin-top:0}
-.integration-logo-lastlink{background:#101418;color:#22c55e}
-.integration-logo-meta{background:#ffffff}
-.integration-logo-meta svg{height:1.7rem;width:1.7rem}
-.integration-logo-google_drive{background:#ffffff}
+.meta-connect-cta{display:flex;align-items:center;gap:14px;margin:14px 0 4px;flex-wrap:wrap}
+.meta-connect-cta span{color:#8e8e93;font-size:13px}

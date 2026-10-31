@@ -2096,3 +2096,14 @@ minutos, com a mesma trava anti-duplicidade do botao manual. A agenda
 de fundo continua existindo como garantia; o intervalo segue
 configuravel por conexao.
 
+## D-146 - Botao de conectar com o Facebook em destaque na tela da Meta
+
+O botao de OAuth existia apenas dentro do formulario de credenciais e
+condicionado ao segredo daquele formulario, entao na pratica o usuario
+nao encontrava onde clicar para conectar. A tela da Meta agora mostra,
+logo abaixo do aviso de expiracao, o botao Conectar com o Facebook (ou
+Reconectar, quando ja existe conexao) sempre que o aplicativo esta
+configurado no projeto e o cofre esta pronto. O clique abre direto a
+tela de autorizacao do Facebook; os formularios de credenciais ficam
+abaixo, apenas para quem administra o aplicativo.
+
