@@ -2258,3 +2258,12 @@ fecha o painel. A barra de filtros do dashboard-v2 quebra em
 linhas e as tabelas dos widgets rolam na horizontal dentro do
 proprio cartao.
 
+## D-158 - Base de receita padrao do dashboard-v2: valor total da venda
+
+O filtro de base de receita do Meus dashboards passa a abrir
+em Valor total da venda (sale_total). A base Comissao do
+produtor continua disponivel no filtro, mas como a fonte
+principal em producao (checkout proprio) nao envia comissao, o
+padrao anterior escondia as vendas e marcava os indicadores
+como indisponiveis a cada abertura do painel.
+

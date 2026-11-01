@@ -35,7 +35,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
  const from=validDate(query.from)??shiftCalendarDate(today,-29);
  const periodDays=Math.max(1,Math.round((Date.parse(`${to}T00:00:00Z`)-Date.parse(`${from}T00:00:00Z`))/86400000)+1);
  const previousTo=shiftCalendarDate(from,-1),previousFrom=shiftCalendarDate(from,-periodDays);
- const revenueBasis=query.basis==="sale_total"?"sale_total" as const:"producer_commission" as const,selectedProducts=productIds(query.product),selectedAccounts=productIds(query.account);
+ const revenueBasis=query.basis==="producer_commission"?"producer_commission" as const:"sale_total" as const,selectedProducts=productIds(query.product),selectedAccounts=productIds(query.account);
  const buyerSegment:"new"|"recurring"|null=query.buyer==="new"||query.buyer==="recurring"?query.buyer:null;
  const filters={from,to,accountIds:selectedAccounts.length?selectedAccounts:null,productIds:selectedProducts.length?selectedProducts:null,timezone:project.timezone,revenueBasis,
   source:query.channel??null,medium:query.medium??null,offerId:query.offer??null,paymentMethod:query.payment_method??null,paymentStatus:query.payment_status??null,buyerSegment};
