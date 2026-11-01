@@ -48,7 +48,7 @@ const ACCESSIBLE_PROJECTS = `
 function actionSum(actionType: string): string {
   return `sum(coalesce((
     select sum((elem ->> 'value')::numeric)
-      from jsonb_array_elements(coalesce(actions, '[]'::jsonb)) elem
+      from jsonb_array_elements(case when jsonb_typeof(actions) = 'array' then actions else '[]'::jsonb end) elem
      where elem ->> 'action_type' = '${actionType}'), 0))::text`;
 }
 

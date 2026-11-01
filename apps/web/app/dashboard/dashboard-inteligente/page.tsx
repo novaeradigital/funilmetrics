@@ -257,7 +257,7 @@ export default async function DashboardInteligentePage({ searchParams }: PagePro
            sum(impressions)::text as impressions,
            sum(coalesce((
              select sum((elem ->> 'value')::numeric)
-               from jsonb_array_elements(coalesce(actions, '[]'::jsonb)) elem
+               from jsonb_array_elements(case when jsonb_typeof(actions) = 'array' then actions else '[]'::jsonb end) elem
               where elem ->> 'action_type' = 'link_click'), 0))::text as link_clicks
            from public.meta_ad_insights_daily
           where project_id = $1
