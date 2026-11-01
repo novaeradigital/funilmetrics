@@ -273,17 +273,6 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
 
     content = (
       <div className="dashboard-main">
-        <header className="dashboard-titlebar compact-titlebar">
-          <div>
-            <p className="eyebrow">Visão geral</p>
-            <h1>Melhores anúncios</h1>
-            <p className="ma-subtitle">
-              Ranking por vendas reais atribuídas, com o funil invertido e a retenção de vídeo de
-              cada criativo.
-            </p>
-          </div>
-        </header>
-
         <MelhoresAnunciosFilters
           accounts={accounts}
           initial={{
@@ -338,12 +327,6 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
   } catch (error) {
     content = (
       <div className="dashboard-main">
-        <header className="dashboard-titlebar compact-titlebar">
-          <div>
-            <p className="eyebrow">Visão geral</p>
-            <h1>Melhores anúncios</h1>
-          </div>
-        </header>
         <section className="dashboard-card">
           <header className="card-header">
             <div>
