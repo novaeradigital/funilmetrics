@@ -23,6 +23,54 @@ export function metaInsightTimeRange(now:Date,timeZone:string,days=30){
   return {since:sinceDate.toISOString().slice(0,10),until};
 }
 
+export type MetaVideoMetrics={
+  views3s:number|null;thruplay:number|null;p25:number|null;
+  p50:number|null;p75:number|null;p100:number|null;
+};
+
+function watchedActionsTotal(value:unknown):number|null{
+  if(!Array.isArray(value))return null;
+  let total=0;let found=false;
+  for(const item of value){
+    if(!item||typeof item!=="object")continue;
+    const raw=Number((item as Record<string,unknown>).value??NaN);
+    if(!Number.isFinite(raw))continue;
+    total+=raw;found=true;
+  }
+  return found?total:null;
+}
+
+function actionTypeTotal(actions:unknown,actionType:string):number|null{
+  if(!Array.isArray(actions))return null;
+  let total=0;let found=false;
+  for(const item of actions){
+    if(!item||typeof item!=="object")continue;
+    const entry=item as Record<string,unknown>;
+    if(entry.action_type!==actionType)continue;
+    const raw=Number(entry.value??NaN);
+    if(!Number.isFinite(raw))continue;
+    total+=raw;found=true;
+  }
+  return found?total:null;
+}
+
+/**
+ * Metricas de video de um insight diario (D-160). Os campos
+ * video_*_watched_actions chegam como arrays de {action_type, value};
+ * a visualizacao de 3 segundos e a acao video_view do array actions.
+ * Campo ausente vira null (indisponivel), nunca zero.
+ */
+export function parseMetaVideoMetrics(insight:Record<string,unknown>):MetaVideoMetrics{
+  return {
+    views3s:actionTypeTotal(insight.actions,"video_view"),
+    thruplay:watchedActionsTotal(insight.video_thruplay_watched_actions),
+    p25:watchedActionsTotal(insight.video_p25_watched_actions),
+    p50:watchedActionsTotal(insight.video_p50_watched_actions),
+    p75:watchedActionsTotal(insight.video_p75_watched_actions),
+    p100:watchedActionsTotal(insight.video_p100_watched_actions),
+  };
+}
+
 class MetaHttpError extends Error{
   constructor(readonly status:number,detail?:string){
     super(`meta_http_${status}${detail?`:${detail.slice(0,180)}`:""}`);
@@ -266,7 +314,7 @@ async function synchronize(pool:pg.Pool,run:Run){
       new Date(),String(account.timezone_name??"UTC"),quick?3:30,
     );
     const insights=await graph.readAll(
-      `${encodeURIComponent(accountId)}/insights?fields=campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,spend,impressions,reach,clicks,actions,action_values&level=ad&time_increment=1&time_range=${encodeURIComponent(JSON.stringify(insightRange))}`);
+      `${encodeURIComponent(accountId)}/insights?fields=campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,spend,impressions,reach,clicks,actions,action_values,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions,video_thruplay_watched_actions&level=ad&time_increment=1&time_range=${encodeURIComponent(JSON.stringify(insightRange))}`);
     for(const insight of insights){
       if(!insight.ad_id||!insight.date_start)continue;
       let ids=(await pool.query<{ad_id:string;ad_set_id:string;campaign_id:string}>(
@@ -318,17 +366,20 @@ async function synchronize(pool:pg.Pool,run:Run){
         }
       }
       if(!ids)continue;
+      const video=parseMetaVideoMetrics(insight);
       await pool.query(
         `insert into public.meta_ad_insights_daily(
            organization_id,project_id,meta_ad_account_id,meta_campaign_id,
            meta_ad_set_id,meta_ad_id,external_ad_id,metric_date,currency,spend,
            spend_original,original_currency,conversion_status,
            impressions,reach,clicks,actions,action_values,raw_metric,
+           video_views_3s,video_thruplay_views,video_p25_views,
+           video_p50_views,video_p75_views,video_p100_views,
            last_synced_at,updated_at
          ) values($1,$2,$3,$4,$5,$6,$7,$8::date,$9,$10,$10,$9,
                   case when nullif($9,'') is null then 'missing_currency'::public.currency_conversion_status
                        else 'pending_rate'::public.currency_conversion_status end,
-                  $11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,now(),now())
+                  $11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,$17,$18,$19,$20,$21,$22,now(),now())
          on conflict(project_id,external_ad_id,metric_date) do update set
            meta_ad_account_id=excluded.meta_ad_account_id,
            meta_campaign_id=excluded.meta_campaign_id,
@@ -412,6 +463,12 @@ async function synchronize(pool:pg.Pool,run:Run){
              then null else meta_ad_insights_daily.converted_at end,
            impressions=excluded.impressions,reach=excluded.reach,
            clicks=excluded.clicks,actions=excluded.actions,
+           video_views_3s=excluded.video_views_3s,
+           video_thruplay_views=excluded.video_thruplay_views,
+           video_p25_views=excluded.video_p25_views,
+           video_p50_views=excluded.video_p50_views,
+           video_p75_views=excluded.video_p75_views,
+           video_p100_views=excluded.video_p100_views,
            action_values=excluded.action_values,raw_metric=excluded.raw_metric,
            last_synced_at=now(),updated_at=now()`,
         [run.organization_id,run.project_id,localAccountId,ids.campaign_id,
@@ -419,7 +476,8 @@ async function synchronize(pool:pg.Pool,run:Run){
          effectiveCurrency,String(insight.spend??"0"),
          String(insight.impressions??"0"),String(insight.reach??"0"),
          String(insight.clicks??"0"),JSON.stringify(insight.actions??null),
-         JSON.stringify(insight.action_values??null),JSON.stringify(insight)],
+         JSON.stringify(insight.action_values??null),JSON.stringify(insight),
+         video.views3s,video.thruplay,video.p25,video.p50,video.p75,video.p100],
       );
       counts.insights+=1;
     }

@@ -2284,3 +2284,32 @@ execucao nova entra se ja houver uma ativa. A abertura do
 painel continua enfileirando a completa quando desatualizada,
 e a agenda horaria nao muda.
 
+## D-160 - Melhores anuncios: ranking por vendas reais, funil invertido e retencao de video
+
+- Contexto: em 2026-11-01 o Fabio alinhou uma tela nova em Visao
+  geral para analisar os melhores anuncios, aprovou primeiro um
+  prototipo visual fora do sistema e depois mandou implementar.
+- Decisao: pagina `/dashboard/melhores-anuncios` com o funil
+  invertido do periodo (impressoes, cliques no link, visualizacoes
+  da pagina, checkouts iniciados e vendas reais atribuidas), o
+  podio dos 3 melhores e o ranking completo, ordenavel por vendas
+  (padrao), receita, ROAS e lucro, com filtro de investimento
+  minimo (padrao R$ 50; anuncio com venda nunca some pelo filtro).
+  Clicar num anuncio expande o funil dele, o diagnostico de
+  retencao e os custos detalhados.
+- Vendas sao as reais atribuidas pelo ID do anuncio no utm_content
+  (mesmo cruzamento do Dashboard Inteligente, primeira atribuicao),
+  nao o numero autorreportado da Meta. O gasto usa spend_base com
+  conversao concluida ou desnecessaria, como no Meus dashboards.
+- Retencao de video: hook rate = visualizacoes de 3 segundos (acao
+  video_view) sobre impressoes; body rate = thruplay sobre
+  visualizacoes de 3 segundos. A regua de 30% nas barras e so
+  referencia visual (atencao de 20% a 30%, critico abaixo de 20%).
+- Coleta: a sincronizacao de insights passa a pedir os campos
+  video_p25/p50/p75/p100_watched_actions e
+  video_thruplay_watched_actions; a migracao
+  20261101180000_meta_insights_video_metrics.sql cria as colunas
+  video_* em meta_ad_insights_daily e o worker grava os marcos a
+  cada sincronizacao. A completa, de 30 dias, preenche o historico
+  recente; alem da janela que a Meta devolve, a retencao fica
+  indisponivel (null), nunca zero fabricado.

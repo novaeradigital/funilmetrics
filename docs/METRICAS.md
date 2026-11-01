@@ -73,3 +73,33 @@ pagamento, segmento de comprador) recortam as vendas, mas nao
 escondem o gasto: ele continua visivel para comparacao no mesmo
 periodo, sempre rotulado como gasto das contas selecionadas.
 
+## Melhores anuncios (ranking, funil invertido e retencao de video)
+
+Ranking de anuncios do periodo. A metrica principal e a **venda real
+atribuida**: pagamentos em producao com efeito positivo, agrupados pelo
+ID do anuncio extraido do `utm_content` (mesma regua do Dashboard
+Inteligente). O gasto e a soma de `spend_base` dos insights diarios com
+conversao cambial concluida ou desnecessaria. Vendas sem ID de anuncio
+ficam fora do ranking e sao informadas a parte.
+
+- **Funil invertido (por anuncio e do periodo):** impressoes, cliques
+  no link (`link_click`), visualizacoes da pagina de destino
+  (`landing_page_view`), checkouts iniciados (`initiate_checkout`) e
+  vendas reais atribuidas. As quatro primeiras etapas sao numeros da
+  Meta; a ultima e a venda registrada no Funil Metrics. A taxa entre
+  etapas vizinhas e `etapa seguinte / etapa anterior * 100`; etapa
+  anterior zerada torna a taxa indisponivel.
+- **Hook rate:** `visualizacoes de 3 segundos / impressoes * 100`. A
+  visualizacao de 3 segundos e a acao `video_view` dos insights,
+  gravada na sincronizacao em `video_views_3s`.
+- **Body rate:** `thruplay / visualizacoes de 3 segundos * 100`, com o
+  thruplay gravado em `video_thruplay_views` a partir de
+  `video_thruplay_watched_actions`.
+- **Segurou ate 75%:** `video_p75_views / visualizacoes de 3 segundos
+  * 100` (a sincronizacao tambem grava os marcos de 25%, 50% e 100%).
+- **Regua visual de retencao:** 30% e apenas referencia de exibicao
+  (verde a partir dela, atencao entre 20% e 30%, critico abaixo de
+  20%); nao e meta e nao muda o calculo.
+- Anuncio sem metrica de video sincronizada, ou com denominador zero,
+  mostra a taxa como indisponivel, nunca como zero fabricado. A
+  frequencia segue a regua operacional (impressoes / alcance diario).
