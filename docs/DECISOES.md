@@ -2345,3 +2345,19 @@ e a agenda horaria nao muda.
   Resumo executivo, Dashboard Inteligente, Criar com IA,
   Relatorios e Debriefing; as paginas continuam existindo e
   acessiveis pela URL, so nao aparecem mais no grupo.
+
+## D-163 - Vendas por produto: um widget so, formato na engrenagem
+
+- Contexto: a biblioteca do Dashboard tinha duas entradas de
+  vendas por produto (o ranking antigo e a rosca da D-144) e o
+  Fabio pediu uma so, com a escolha do formato na configuracao
+  do card.
+- Decisao: fica um unico item 'Vendas por produto'. A
+  engrenagem do card ganha o campo Formato (Ranking ou Rosca),
+  gravado na configuracao do widget (format). Os dois formatos
+  leem a mesma base: vendas aprovadas por produto; a consulta
+  antiga do ranking, que contava pedidos em qualquer estado,
+  foi removida da pagina. Cards antigos do tipo
+  product_sales_donut continuam abrindo como rosca (o tipo
+  segue aceito no salvamento e no renderizador, so saiu do
+  catalogo) e podem trocar de formato pela engrenagem.
