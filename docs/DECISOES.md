@@ -2334,3 +2334,14 @@ e a agenda horaria nao muda.
   resolve o intervalo na data de calendario do fuso do projeto
   (resolveDateRange) e filtra insights por metric_date e vendas
   pela data no fuso do projeto, limites inclusivos.
+
+## D-162 - Menu Visao geral enxuto: Dashboard e Melhores anuncios
+
+- Contexto: com a tela de Melhores anuncios pronta, o Fabio
+  reorganizou o menu principal do painel.
+- Decisao: o grupo Visao geral passa a ter apenas dois itens,
+  nesta ordem: Dashboard (a antiga tela Meus dashboards, em
+  /dashboard-v2, renomeada) e Melhores anuncios. Saem do menu
+  Resumo executivo, Dashboard Inteligente, Criar com IA,
+  Relatorios e Debriefing; as paginas continuam existindo e
+  acessiveis pela URL, so nao aparecem mais no grupo.

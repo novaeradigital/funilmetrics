@@ -9,13 +9,8 @@ type Props={activeHref:string;footerLabel?:string;projects:ProjectOption[];activ
 
 const navigationGroups=[
  {key:"overview",label:"Visão geral",icon:"overview",items:[
-  {href:"/dashboard",label:"Resumo executivo"},
-  {href:"/dashboard/dashboard-inteligente",label:"Dashboard Inteligente"},
-  {href:"/dashboard/melhores-anuncios",label:"Melhores anúncios"},
-  {href:"/dashboard-v2",label:"Meus dashboards"},
-  {href:"/dashboard/dashboards?panel=ai",label:"Criar com IA"},
-  {href:"/dashboard/relatorios",label:"Relatórios"},
-  {href:"/dashboard/debriefing",label:"Debriefing"}]},
+  {href:"/dashboard-v2",label:"Dashboard"},
+  {href:"/dashboard/melhores-anuncios",label:"Melhores anúncios"}]},
  {key:"performance",label:"Performance",icon:"campaigns",items:[
   {href:"/dashboard/gerenciador-anuncios",label:"Gerenciador de anúncios"},
   {href:"/dashboard/campanhas",label:"Campanhas"},{href:"/dashboard/vendas",label:"Vendas"},
