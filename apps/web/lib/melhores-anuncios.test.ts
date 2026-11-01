@@ -1,13 +1,60 @@
 import { describe, expect, it } from "vitest";
 import {
   bodyRate,
+  formatRangeLabel,
   hookRate,
+  resolveDateRange,
   retentionDiagnosis,
   retentionLevel,
   sortBestAds,
   stageRate,
   type BestAdRow,
 } from "./melhores-anuncios";
+
+describe("resolveDateRange", () => {
+  const today = "2026-11-01";
+
+  it("o padrão é Últimos 30 dias terminando hoje", () => {
+    expect(resolveDateRange({}, today)).toEqual({
+      from: "2026-10-03",
+      to: "2026-11-01",
+      preset: "30d",
+      label: "Últimos 30 dias",
+    });
+  });
+
+  it("resolve os presets nomeados", () => {
+    expect(resolveDateRange({ period: "today" }, today).from).toBe("2026-11-01");
+    expect(resolveDateRange({ period: "yesterday" }, today)).toMatchObject({
+      from: "2026-10-31",
+      to: "2026-10-31",
+    });
+    expect(resolveDateRange({ period: "7d" }, today).from).toBe("2026-10-26");
+    expect(resolveDateRange({ period: "month" }, today)).toMatchObject({
+      from: "2026-11-01",
+      to: "2026-11-01",
+      label: "Este mês",
+    });
+    expect(resolveDateRange({ period: "all" }, today)).toMatchObject({ from: null, to: null });
+  });
+
+  it("intervalo explícito válido vence o preset", () => {
+    const range = resolveDateRange({ from: "2026-10-01", to: "2026-10-30", period: "7d" }, today);
+    expect(range.preset).toBe("custom");
+    expect(range.from).toBe("2026-10-01");
+    expect(range.to).toBe("2026-10-30");
+  });
+
+  it("intervalo inválido ou invertido cai no padrão", () => {
+    expect(resolveDateRange({ from: "2026-10-30", to: "2026-10-01" }, today).preset).toBe("30d");
+    expect(resolveDateRange({ from: "ontem", to: "hoje" }, today).preset).toBe("30d");
+  });
+
+  it("formata o rótulo do intervalo", () => {
+    expect(formatRangeLabel("2026-10-01", "2026-10-01")).toBe("1 de out. de 2026");
+    expect(formatRangeLabel("2026-10-01", "2026-10-30")).toBe("1 de out. de 2026 a 30 de out. de 2026");
+  });
+});
 
 describe("hookRate e bodyRate", () => {
   it("calcula as taxas em percentual", () => {

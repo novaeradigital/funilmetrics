@@ -4,9 +4,7 @@ import { useMemo, useState } from "react";
 import {
   retentionDiagnosis,
   retentionLevel,
-  sortBestAds,
   stageRate,
-  type BestAdSort,
 } from "../../../lib/melhores-anuncios";
 
 export type BestAdViewRow = {
@@ -46,16 +44,10 @@ export type FunnelTotals = {
 
 type Props = {
   rows: BestAdViewRow[];
+  totalAds: number;
   funnel: FunnelTotals;
   currency: string;
 };
-
-const sortOptions: { key: BestAdSort; label: string }[] = [
-  { key: "sales", label: "Vendas" },
-  { key: "revenue", label: "Receita" },
-  { key: "roas", label: "ROAS" },
-  { key: "profit", label: "Lucro" },
-];
 
 function pctText(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "—";
@@ -122,9 +114,7 @@ function FunnelSteps({
   );
 }
 
-export function MelhoresAnunciosClient({ rows, funnel, currency }: Props) {
-  const [sort, setSort] = useState<BestAdSort>("sales");
-  const [minSpend, setMinSpend] = useState("50");
+export function MelhoresAnunciosClient({ rows, totalAds, funnel, currency }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const money = useMemo(
@@ -133,12 +123,7 @@ export function MelhoresAnunciosClient({ rows, funnel, currency }: Props) {
   );
   const number = useMemo(() => new Intl.NumberFormat("pt-BR"), []);
 
-  const minSpendValue = Number(minSpend.replace(",", ".")) || 0;
-  const visible = useMemo(
-    () => rows.filter((row) => row.spend >= minSpendValue || row.sales > 0),
-    [rows, minSpendValue],
-  );
-  const sorted = useMemo(() => sortBestAds(visible, sort), [visible, sort]);
+  const sorted = rows;
   const podium = sorted.slice(0, 3);
   const expandedId = expanded ?? sorted[0]?.adId ?? null;
 
@@ -162,30 +147,6 @@ export function MelhoresAnunciosClient({ rows, funnel, currency }: Props) {
         </header>
         <FunnelSteps steps={funnelSteps} number={number} />
       </section>
-
-      <div className="ma-controls">
-        <label>
-          Ordenar por
-          <select value={sort} onChange={(event) => setSort(event.target.value as BestAdSort)}>
-            {sortOptions.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Investimento mínimo (R$)
-          <input
-            inputMode="decimal"
-            value={minSpend}
-            onChange={(event) => setMinSpend(event.target.value)}
-          />
-        </label>
-        <span className="ma-note">
-          {visible.length} de {rows.length} anúncios no ranking
-        </span>
-      </div>
 
       {podium.length > 0 ? (
         <section className="ma-podium" aria-label="Três melhores anúncios">
@@ -224,12 +185,14 @@ export function MelhoresAnunciosClient({ rows, funnel, currency }: Props) {
             <p className="panel-label">Ranking do período</p>
             <h2>Todos os anúncios</h2>
           </div>
-          <span className="ma-note">Clique num anúncio para abrir o funil dele</span>
+          <span className="ma-note">
+            {sorted.length} de {totalAds} anúncios · clique num anúncio para abrir o funil dele
+          </span>
         </header>
         {sorted.length === 0 ? (
           <p className="ma-empty">
-            Nenhum anúncio passa no investimento mínimo atual. Abaixe o valor para ver o ranking
-            completo.
+            Nenhum anúncio passa no investimento mínimo atual. Abaixe o valor na barra de filtros
+            e clique em Aplicar para ver o ranking completo.
           </p>
         ) : (
           <div className="ma-list">

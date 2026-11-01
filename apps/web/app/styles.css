@@ -6293,12 +6293,6 @@ body:has(.manager-column-resizer:active){cursor:col-resize;user-select:none}
 .ma-level-good { color: #24d689; }
 .ma-level-warn { color: #f0b429; }
 .ma-level-bad { color: #ff7a7a; }
-.ma-accounts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 4px 0 18px; padding: 12px 16px; background: rgb(255 255 255 / 3%); border: 1px solid rgb(138 189 164 / 14%); border-radius: 0.9rem; font-size: 0.88rem; }
-.ma-accounts-label { font-weight: 600; color: rgb(226 240 233 / 85%); }
-.ma-accounts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.ma-accounts input { accent-color: #24d689; }
-.ma-accounts button { background: #24d689; border: 0; border-radius: 8px; color: #04120b; font-weight: 700; padding: 6px 14px; cursor: pointer; }
-.ma-accounts a { color: #65e5aa; }
 .ma-funnel { padding: 8px 0 4px; }
 .ma-funnel-step { margin-bottom: 12px; }
 .ma-funnel-step:last-child { margin-bottom: 4px; }
@@ -6307,10 +6301,6 @@ body:has(.manager-column-resizer:active){cursor:col-resize;user-select:none}
 .ma-funnel-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 210px; background: linear-gradient(90deg, #24d689, #1fae6e); color: #04120b; border-radius: 8px; padding: 8px 12px; font-size: 0.86rem; white-space: nowrap; }
 .ma-funnel-bar strong { font-size: 0.98rem; }
 .ma-funnel-compact .ma-funnel-bar { padding: 5px 10px; font-size: 0.8rem; }
-.ma-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 18px; margin: 18px 0 14px; }
-.ma-controls label { display: grid; gap: 5px; font-size: 0.78rem; color: rgb(226 240 233 / 65%); }
-.ma-controls select, .ma-controls input { background: #0c1b15; border: 1px solid rgb(138 189 164 / 25%); border-radius: 8px; color: inherit; padding: 7px 10px; font-size: 0.9rem; }
-.ma-controls input { width: 110px; }
 .ma-podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 18px; }
 .ma-podium-card { background: linear-gradient(145deg, rgb(255 255 255 / 3%), transparent 60%), #0a1712; border: 1px solid rgb(138 189 164 / 14%); border-radius: 0.9rem; padding: 16px; display: grid; gap: 8px; align-content: start; }
 .ma-podium-card.is-first { border-color: rgb(36 214 137 / 45%); }
@@ -6367,3 +6357,47 @@ body:has(.manager-column-resizer:active){cursor:col-resize;user-select:none}
   .ma-funnel-bar { min-width: 150px; font-size: 0.8rem; }
   .ma-row-money { grid-template-columns: repeat(2, 1fr); }
 }
+/* Barra de filtros dos Melhores anuncios (D-161) */
+.ma-filterbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0 20px; }
+.ma-pill { display: inline-flex; align-items: center; gap: 8px; background: rgb(255 255 255 / 4%); border: 1px solid rgb(138 189 164 / 22%); border-radius: 999px; color: inherit; font: inherit; font-size: 0.88rem; padding: 8px 14px; cursor: pointer; }
+.ma-pill:hover, .ma-pill.is-open { border-color: rgb(36 214 137 / 55%); }
+.ma-pill-field { cursor: default; }
+.ma-pill-field > span:first-child { color: rgb(226 240 233 / 55%); font-size: 0.8rem; }
+.ma-pill select { background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; outline: none; }
+.ma-pill select option { background: #0c1b15; }
+.ma-pill-money { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.ma-pill-money input { width: 58px; background: transparent; border: 0; border-bottom: 1px dashed rgb(138 189 164 / 40%); color: inherit; font: inherit; font-weight: 700; padding: 1px 2px; outline: none; }
+.ma-pill-badge { background: #24d689; color: #04120b; font-size: 0.72rem; font-weight: 800; border-radius: 999px; min-width: 19px; height: 19px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+.ma-apply { background: #24d689; border: 0; border-radius: 999px; color: #04120b; font: inherit; font-weight: 800; font-size: 0.9rem; padding: 9px 22px; cursor: pointer; }
+.ma-apply:hover { filter: brightness(1.08); }
+.ma-pop-wrap { position: relative; }
+.ma-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; background: #0c1b15; border: 1px solid rgb(138 189 164 / 25%); border-radius: 14px; box-shadow: 0 18px 44px rgb(0 0 0 / 55%); padding: 14px; }
+.ma-pop-accounts { display: grid; gap: 9px; min-width: 250px; font-size: 0.9rem; }
+.ma-pop-accounts label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.ma-pop-accounts input { accent-color: #24d689; }
+.ma-pop-accounts small { color: rgb(226 240 233 / 50%); }
+.ma-pop-date { display: flex; gap: 18px; }
+.ma-cal-presets { display: grid; gap: 2px; align-content: start; min-width: 148px; }
+.ma-cal-presets button { background: none; border: 0; color: inherit; font: inherit; font-size: 0.88rem; text-align: left; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.ma-cal-presets button:hover { background: rgb(255 255 255 / 5%); }
+.ma-cal-presets button.is-active { background: rgb(36 214 137 / 16%); color: #65e5aa; font-weight: 700; }
+.ma-cal-presets small { color: rgb(226 240 233 / 45%); padding: 8px 10px 0; font-size: 0.74rem; }
+.ma-cal-body { display: grid; gap: 8px; }
+.ma-cal-nav { display: flex; justify-content: space-between; }
+.ma-cal-nav button { background: rgb(255 255 255 / 5%); border: 1px solid rgb(138 189 164 / 20%); color: inherit; width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: 1rem; line-height: 1; }
+.ma-cal-nav button:disabled { opacity: 0.35; cursor: default; }
+.ma-cal-months { display: flex; gap: 22px; }
+.ma-cal-month { display: grid; gap: 6px; align-content: start; }
+.ma-cal-month > strong { font-size: 0.9rem; text-align: center; }
+.ma-cal-week, .ma-cal-grid { display: grid; grid-template-columns: repeat(7, 32px); gap: 2px; }
+.ma-cal-week span { font-size: 0.68rem; color: rgb(226 240 233 / 45%); text-align: center; }
+.ma-cal-day { background: none; border: 0; color: inherit; font: inherit; font-size: 0.82rem; height: 32px; border-radius: 8px; cursor: pointer; }
+.ma-cal-day:hover:not(:disabled) { background: rgb(255 255 255 / 7%); }
+.ma-cal-day:disabled { opacity: 0.3; cursor: default; }
+.ma-cal-day.is-range { background: rgb(36 214 137 / 16%); border-radius: 0; }
+.ma-cal-day.is-start, .ma-cal-day.is-end { background: #24d689; color: #04120b; font-weight: 800; border-radius: 8px; }
+.ma-cal-day.is-today { box-shadow: inset 0 0 0 1px rgb(101 229 170 / 60%); }
+.ma-cal-footer { display: flex; align-items: center; gap: 12px; font-size: 0.8rem; color: rgb(226 240 233 / 70%); border-top: 1px solid rgb(138 189 164 / 14%); padding-top: 10px; }
+.ma-cal-tz { color: rgb(226 240 233 / 40%); font-size: 0.72rem; }
+.ma-cal-cancel { margin-left: auto; background: none; border: 1px solid rgb(138 189 164 / 30%); color: inherit; border-radius: 8px; font: inherit; font-size: 0.82rem; padding: 6px 14px; cursor: pointer; }
+@media (max-width: 900px) { .ma-pop-date { flex-direction: column; } .ma-cal-months { flex-wrap: wrap; } .ma-pop { max-width: calc(100vw - 40px); overflow-x: auto; } }

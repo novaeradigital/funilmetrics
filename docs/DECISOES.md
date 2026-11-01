@@ -2313,3 +2313,24 @@ e a agenda horaria nao muda.
   cada sincronizacao. A completa, de 30 dias, preenche o historico
   recente; alem da janela que a Meta devolve, a retencao fica
   indisponivel (null), nunca zero fabricado.
+
+## D-161 - Melhores anuncios: barra unica de filtros com intervalo de datas
+
+- Contexto: no mesmo dia da D-160, o Fabio pediu os filtros da
+  tela no estilo das ferramentas de referencia (pills com icone,
+  botao Filtros com selo de quantidade e seletor de data com
+  calendario de dois meses) e a remocao da barra separada de
+  contas que ficava abaixo do titulo.
+- Decisao: uma unica barra na cabeca da pagina, na ordem ordenar
+  por, investimento minimo, Filtros (contas, num painel com
+  checkboxes e selo com a quantidade marcada) e data, com um
+  unico botao Aplicar no fim da barra. Todos os filtros viram
+  parametros de URL aplicados de uma vez; ordenacao e
+  investimento minimo deixam de ser estado local da lista.
+- Data: o periodo sai dos presets fixos de link (7/30/90/tudo no
+  topo) e vira intervalo explicito: presets Hoje, Ontem, Ultimos
+  7 dias, Ultimos 30 dias, Este mes e Todo o historico, ou
+  intervalo personalizado escolhido no calendario. A pagina
+  resolve o intervalo na data de calendario do fuso do projeto
+  (resolveDateRange) e filtra insights por metric_date e vendas
+  pela data no fuso do projeto, limites inclusivos.

@@ -8,25 +8,33 @@ import { createClient } from "../../../lib/supabase/server";
 import { getActiveProject } from "../../../lib/active-project";
 import { queueMetaSyncIfStale, queueQuickMetaSync } from "../../../lib/meta-sync-queue";
 import { computeDerived, extractAdId } from "../../../lib/dashboard-inteligente";
-import { bodyRate, hookRate } from "../../../lib/melhores-anuncios";
+import { calendarDateInTimeZone } from "../../../lib/calendar-date";
+import {
+  bodyRate,
+  hookRate,
+  resolveDateRange,
+  sortBestAds,
+  type BestAdSort,
+} from "../../../lib/melhores-anuncios";
 import {
   MelhoresAnunciosClient,
   type BestAdViewRow,
   type FunnelTotals,
 } from "./melhores-anuncios-client";
+import { MelhoresAnunciosFilters } from "./melhores-anuncios-filters";
 
 export const dynamic = "force-dynamic";
 
-type PageProps = { searchParams: Promise<{ period?: string; account?: string | string[] }> };
-
-const periods = {
-  "7d": { label: "7 dias", description: "Últimos 7 dias", days: 7 },
-  "30d": { label: "30 dias", description: "Últimos 30 dias", days: 30 },
-  "90d": { label: "90 dias", description: "Últimos 90 dias", days: 90 },
-  all: { label: "Tudo", description: "Todo o histórico", days: null },
-} as const;
-
-type PeriodKey = keyof typeof periods;
+type PageProps = {
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    period?: string;
+    account?: string | string[];
+    sort?: string;
+    min?: string;
+  }>;
+};
 
 const ACCESSIBLE_PROJECTS = `
   with accessible_projects as (
@@ -83,11 +91,10 @@ function selectedAccounts(raw: string | string[] | undefined, valid: Set<string>
   return parts.filter((id) => valid.has(id));
 }
 
+const sortKeys: BestAdSort[] = ["sales", "revenue", "roas", "profit"];
+
 export default async function MelhoresAnunciosPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const periodKey: PeriodKey =
-    params.period && params.period in periods ? (params.period as PeriodKey) : "30d";
-  const period = periods[periodKey];
 
   const supabase = await createClient();
   const { data: authData } = await supabase.auth.getUser();
@@ -111,7 +118,14 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
     }).catch(() => []);
   });
   const userId = authData.user.id;
-  const days = period.days;
+
+  const today = calendarDateInTimeZone(new Date(), project.timezone);
+  const range = resolveDateRange({ from: params.from, to: params.to, period: params.period }, today);
+  const sort: BestAdSort = sortKeys.includes(params.sort as BestAdSort)
+    ? (params.sort as BestAdSort)
+    : "sales";
+  const minSpendRaw = Number(params.min);
+  const minSpend = Number.isFinite(minSpendRaw) && minSpendRaw >= 0 ? minSpendRaw : 50;
 
   let content: ReactNode;
   try {
@@ -142,9 +156,10 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
           where event.data_scope = 'production'
             and event.project_id in (select id from accessible_projects)
             and event.financial_effect > 0
-            and ($2::int is null or event.occurred_at >= now() - ($2::int * interval '1 day'))
+            and ($2::date is null or (event.occurred_at at time zone $5)::date >= $2::date)
+            and ($4::date is null or (event.occurred_at at time zone $5)::date <= $4::date)
           group by first_attr.utm_content`,
-        [userId, days, project.id],
+        [userId, range.from, project.id, range.to, project.timezone],
       )
     ).rows;
 
@@ -164,10 +179,11 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
            from public.meta_ad_insights_daily
           where project_id = $1
             and conversion_status in ('converted', 'not_required')
-            and ($2::int is null or metric_date >= current_date - ($2::int - 1))
-            and ($3::uuid[] is null or meta_ad_account_id = any($3))
+            and ($2::date is null or metric_date >= $2::date)
+            and ($3::date is null or metric_date <= $3::date)
+            and ($4::uuid[] is null or meta_ad_account_id = any($4))
           group by external_ad_id`,
-        [project.id, days, accountFilter],
+        [project.id, range.from, range.to, accountFilter],
       )
     ).rows;
 
@@ -249,6 +265,9 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
       sales: rows.reduce((sum, row) => sum + row.sales, 0),
     };
 
+    const sorted = sortBestAds(rows, sort);
+    const visible = sorted.filter((row) => row.spend >= minSpend || row.sales > 0);
+
     const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: project.currency });
     const number = new Intl.NumberFormat("pt-BR");
 
@@ -260,30 +279,22 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
             <h1>Melhores anúncios</h1>
             <p className="ma-subtitle">
               Ranking por vendas reais atribuídas, com o funil invertido e a retenção de vídeo de
-              cada criativo. {period.description}.
+              cada criativo.
             </p>
           </div>
         </header>
 
-        <form className="ma-accounts" method="get">
-          <input type="hidden" name="period" value={periodKey} />
-          <span className="ma-accounts-label">Contas de anúncios</span>
-          {accounts.map((account) => (
-            <label key={account.id}>
-              <input
-                type="checkbox"
-                name="account"
-                value={account.id}
-                defaultChecked={accountIds.includes(account.id)}
-              />
-              {account.name}
-            </label>
-          ))}
-          <button type="submit">Aplicar</button>
-          {accountIds.length ? (
-            <a href={`/dashboard/melhores-anuncios?period=${periodKey}`}>Todas as contas</a>
-          ) : null}
-        </form>
+        <MelhoresAnunciosFilters
+          accounts={accounts}
+          initial={{
+            from: range.from,
+            to: range.to,
+            preset: range.preset,
+            sort,
+            minSpend,
+            accountIds,
+          }}
+        />
 
         {rows.length === 0 ? (
           <section className="dashboard-card">
@@ -301,7 +312,12 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
           </section>
         ) : (
           <>
-            <MelhoresAnunciosClient rows={rows} funnel={funnel} currency={project.currency} />
+            <MelhoresAnunciosClient
+              rows={visible}
+              totalAds={rows.length}
+              funnel={funnel}
+              currency={project.currency}
+            />
             {organic.sales > 0 ? (
               <p className="metric-footnote">
                 Fora do ranking: {number.format(organic.sales)} venda(s) sem anúncio identificado
@@ -344,33 +360,11 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
     );
   }
 
-  const accountSuffix = (() => {
-    const raw = params.account;
-    const parts = (Array.isArray(raw) ? raw : [raw ?? ""])
-      .flatMap((value) => value.split(","))
-      .map((value) => value.trim())
-      .filter(Boolean);
-    return parts.length ? `&account=${parts.join(",")}` : "";
-  })();
-
   return (
     <main className="app-layout">
       <DashboardSidebar activeHref="/dashboard/melhores-anuncios" />
       <section className="app-content">
-        <DashboardTopbar returnTo="/dashboard/melhores-anuncios">
-          <nav aria-label="Período dos melhores anúncios" className="period-filter topbar-period">
-            {Object.entries(periods).map(([key, option]) => (
-              <a
-                aria-current={key === periodKey ? "page" : undefined}
-                className={key === periodKey ? "period-active" : undefined}
-                href={`/dashboard/melhores-anuncios?period=${key}${accountSuffix}`}
-                key={key}
-              >
-                {option.label}
-              </a>
-            ))}
-          </nav>
-        </DashboardTopbar>
+        <DashboardTopbar returnTo="/dashboard/melhores-anuncios" />
         {content}
       </section>
     </main>

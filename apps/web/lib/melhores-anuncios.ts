@@ -8,6 +8,8 @@
  * (null), nunca zero fabricado.
  */
 
+import { shiftCalendarDate } from "./calendar-date";
+
 /** Referência visual de retenção saudável, em % (régua da tela, não é meta). */
 export const RETENTION_BENCHMARK = 30;
 /** Abaixo disso a retenção entra em atenção; abaixo de 20, crítica. */
@@ -56,6 +58,73 @@ export function retentionDiagnosis(hook: number | null, body: number | null): st
   if (bodyGood)
     return "O corpo segura quem fica. Trocar só os 3 primeiros segundos e reaproveitar o restante do criativo.";
   return "Hook e corpo fracos. Candidato a aposentar ou regravar o criativo.";
+}
+
+export type PeriodPreset = "today" | "yesterday" | "7d" | "30d" | "90d" | "month" | "all" | "custom";
+
+export type ResolvedRange = {
+  from: string | null;
+  to: string | null;
+  preset: PeriodPreset;
+  label: string;
+};
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export function isDateString(value: string | null | undefined): value is string {
+  return typeof value === "string" && DATE_PATTERN.test(value);
+}
+
+/** "2026-10-01" vira "1 de out. de 2026" (fuso UTC, data de calendário). */
+export function formatCalendarDate(date: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
+export function formatRangeLabel(from: string, to: string): string {
+  if (from === to) return formatCalendarDate(from);
+  return `${formatCalendarDate(from)} a ${formatCalendarDate(to)}`;
+}
+
+/**
+ * Resolve o período da tela (D-161): intervalo explícito from/to válido
+ * vence; senão o preset pedido; o padrão é Últimos 30 dias. `today` é a
+ * data de calendário de hoje no fuso do projeto.
+ */
+export function resolveDateRange(
+  input: { from?: string; to?: string; period?: string },
+  today: string,
+): ResolvedRange {
+  if (isDateString(input.from) && isDateString(input.to) && input.from <= input.to) {
+    return {
+      from: input.from,
+      to: input.to,
+      preset: "custom",
+      label: formatRangeLabel(input.from, input.to),
+    };
+  }
+  switch (input.period) {
+    case "all":
+      return { from: null, to: null, preset: "all", label: "Todo o histórico" };
+    case "today":
+      return { from: today, to: today, preset: "today", label: "Hoje" };
+    case "yesterday": {
+      const day = shiftCalendarDate(today, -1);
+      return { from: day, to: day, preset: "yesterday", label: "Ontem" };
+    }
+    case "7d":
+      return { from: shiftCalendarDate(today, -6), to: today, preset: "7d", label: "Últimos 7 dias" };
+    case "90d":
+      return { from: shiftCalendarDate(today, -89), to: today, preset: "90d", label: "Últimos 90 dias" };
+    case "month":
+      return { from: `${today.slice(0, 8)}01`, to: today, preset: "month", label: "Este mês" };
+    default:
+      return { from: shiftCalendarDate(today, -29), to: today, preset: "30d", label: "Últimos 30 dias" };
+  }
 }
 
 export type BestAdRow = {
