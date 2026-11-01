@@ -73,6 +73,12 @@ pagamento, segmento de comprador) recortam as vendas, mas nao
 escondem o gasto: ele continua visivel para comparacao no mesmo
 periodo, sempre rotulado como gasto das contas selecionadas.
 
+## Lucro por conta (widget do Dashboard)
+
+- Investimento da conta: soma de spend_base no periodo, mesma base do widget Investimento por conta, respeitando o filtro de contas.
+- Faturamento da conta: receita das vendas aprovadas atribuidas aos anuncios da conta (primeira atribuicao, ID do anuncio no utm_content), na base de receita selecionada no Dashboard.
+- Lucro = faturamento atribuido menos investimento (lucro de midia, sem taxas do gateway nem custo de produto). ROAS = faturamento dividido pelo investimento; sem investimento no periodo, ROAS indisponivel.
+- Vendas sem anuncio identificado nao sao atribuidas a nenhuma conta; a soma das contas pode ficar abaixo do faturamento total do painel.
 ## Melhores anuncios (ranking, funil invertido e retencao de video)
 
 Ranking de anuncios do periodo. A metrica principal e a **venda real

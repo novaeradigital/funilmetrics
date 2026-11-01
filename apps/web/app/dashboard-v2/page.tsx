@@ -47,7 +47,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
   meta_add_to_cart:{value:0,available:false},meta_initiate_checkout:{value:0,available:false}};
  const emptySeries={gross_revenue:[],net_revenue:[],approved_payments:[],reversed_payments:[],meta_spend:[],meta_impressions:[],meta_clicks:[]};
  const previousFilters={...filters,from:previousFrom,to:previousTo};
- const [metrics,previousMetrics,series,accounts,products,offers,media,paymentMethods,paymentStatuses,accountSpend,channels,hours,savedWidgets,savedTemplates,adSalesUtm,adSpendRows,adNames,phoneSalesRows,recentSaleRows,productApprovedRows,methodSaleRows,methodAttemptRows]=await Promise.all([
+ const [metrics,previousMetrics,series,accounts,products,offers,media,paymentMethods,paymentStatuses,accountSpend,channels,hours,savedWidgets,savedTemplates,adSalesUtm,adSpendRows,adNames,phoneSalesRows,recentSaleRows,productApprovedRows,methodSaleRows,methodAttemptRows,spendByAccountRows,adAccountRows]=await Promise.all([
   loadDashboardMetricValues(database,project.id,30,filters).catch(()=>emptyValues),
   loadDashboardMetricValues(database,project.id,30,previousFilters).catch(()=>emptyValues),
   loadDashboardMetricSeries(database,project.id,30,filters).catch(()=>emptySeries),
@@ -139,12 +139,19 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
      and (ord.occurred_at at time zone $4)>=$2::date and (ord.occurred_at at time zone $4)<$3::date+interval '1 day'
      and ($5::uuid[] is null or exists(select 1 from public.commerce_order_items item where item.order_id=ord.id and item.product_id=any($5)))
     group by payment.method`,[project.id,from,to,project.timezone,selectedProducts.length?selectedProducts:null]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{account_id:string;name:string;spend:string}>(`select account.id::text account_id,account.name,coalesce(sum(insight.spend_base),0)::text spend from public.meta_ad_insights_daily insight join public.meta_ad_accounts account on account.id=insight.meta_ad_account_id where insight.project_id=$1 and insight.metric_date between $2::date and $3::date and insight.conversion_status in ('converted','not_required') and ($4::uuid[] is null or account.id=any($4)) group by account.id,account.name`,[project.id,from,to,selectedAccounts.length?selectedAccounts:null]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<{external_id:string;account_id:string;account_name:string}>(`select ad.external_id,ad.meta_ad_account_id::text account_id,account.name account_name from public.meta_ads ad join public.meta_ad_accounts account on account.id=ad.meta_ad_account_id where ad.project_id=$1`,[project.id]).then(r=>r.rows).catch(()=>[]),
  ]);
  const salesByAd=new Map<string,{sales:number;revenue:number}>();const organic={sales:0,revenue:0};
  for(const row of adSalesUtm){const adId=extractAdId(row.utm_content);if(!adId){organic.sales+=row.sales;organic.revenue+=Number(row.revenue);continue}const current=salesByAd.get(adId)??{sales:0,revenue:0};current.sales+=row.sales;current.revenue+=Number(row.revenue);salesByAd.set(adId,current)}
  const spendByAd=new Map(adSpendRows.map(row=>[row.external_ad_id,row]));
  const nameByAd=new Map(adNames.map(row=>[row.external_id,row]));
  const adPerformance=[...new Set([...salesByAd.keys(),...spendByAd.keys()])].map(adId=>{const sale=salesByAd.get(adId)??{sales:0,revenue:0};const spendRow=spendByAd.get(adId);return{adId,name:nameByAd.get(adId)?.name??`Anúncio ${adId}`,campaign:nameByAd.get(adId)?.campaign_name??"—",sales:sale.sales,revenue:sale.revenue,spend:spendRow?Number(spendRow.spend):0,impressions:spendRow?Number(spendRow.impressions):0,linkClicks:spendRow?Number(spendRow.link_clicks):0}}).sort((a,b)=>b.revenue-a.revenue||b.spend-a.spend).slice(0,50);
+ const accountByAd=new Map(adAccountRows.map(row=>[row.external_id,row]));
+ const profitMap=new Map<string,{name:string;spend:number;revenue:number;sales:number}>();
+ for(const row of spendByAccountRows)profitMap.set(row.account_id,{name:row.name,spend:Number(row.spend),revenue:0,sales:0});
+ for(const [adId,sale] of salesByAd){const acc=accountByAd.get(adId);if(!acc)continue;if(selectedAccounts.length&&!selectedAccounts.includes(acc.account_id))continue;const current=profitMap.get(acc.account_id)??{name:acc.account_name,spend:0,revenue:0,sales:0};current.revenue+=sale.revenue;current.sales+=sale.sales;profitMap.set(acc.account_id,current)}
+ const accountProfit=[...profitMap.values()].map(row=>({...row,profit:row.revenue-row.spend,roas:row.spend>0?row.revenue/row.spend:null})).sort((a,b)=>b.profit-a.profit);
  const regionMap=new Map<string,{sales:number;revenue:number}>();let salesWithoutPhone=0;
  for(const row of phoneSalesRows){const uf=dddToUf(row.phone);if(!uf){salesWithoutPhone+=row.sales;continue}const current=regionMap.get(uf)??{sales:0,revenue:0};current.sales+=row.sales;current.revenue+=Number(row.revenue);regionMap.set(uf,current)}
  const regions=[...regionMap.entries()].map(([uf,value])=>({uf,name:UF_NAMES[uf]??uf,sales:value.sales,revenue:value.revenue})).sort((a,b)=>b.sales-a.sales);
@@ -160,6 +167,6 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
    accounts={accounts} products={products} metrics={metrics} previousMetrics={previousMetrics} series={series}
    advancedOptions={{offers,media,paymentMethods,paymentStatuses}}
    savedWidgets={savedWidgets} savedTemplates={savedTemplates}
-   rankings={{accountSpend:accountSpend as Ranked[],channels:channels as Ranked[],hours:hours as Ranked[]}} intelligent={intelligent}/>
+   rankings={{accountSpend:accountSpend as Ranked[],channels:channels as Ranked[],hours:hours as Ranked[],accountProfit}} intelligent={intelligent}/>
   </section></main>;
 }

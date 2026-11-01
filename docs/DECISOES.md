@@ -2382,3 +2382,17 @@ e a agenda horaria nao muda.
 - Visual da rosca: centro com TOTAL acima do numero, tooltip
   'nome: N vendas' e legenda 'N vendas (nome)' com o percentual
   discreto no fim, uma cor por fatia pela paleta existente.
+
+## D-165: Widget "Lucro por conta" no Dashboard
+
+Contexto: Fabio quer acompanhar o resultado por conta de anuncios, nao so o investimento: quanto cada conta faturou e quanto lucrou no periodo.
+
+Decisao: widget novo e separado do "Investimento por conta", kind account_profit no Dashboard (dashboard-v2). Colunas: conta, investimento, faturamento atribuido, vendas, ROAS e lucro (verde quando positivo, vermelho quando negativo). Ordenacao configuravel na engrenagem (Ordenar por: lucro, faturamento ou investimento; direcao e limite pelos controles de ranking). Padrao: ordenar por lucro.
+
+Regras:
+
+- Investimento: soma de spend_base dos insights da conta no periodo (mesma base do widget de investimento), respeitando o filtro de contas do Dashboard.
+- Faturamento e vendas: vendas aprovadas (normalized_payment_events, efeito positivo) atribuidas aos anuncios da conta pela primeira atribuicao (ID do anuncio no utm_content, mesmo cruzamento de Melhores anuncios e do Dashboard Inteligente), na base de receita selecionada no Dashboard.
+- Lucro = faturamento atribuido menos investimento (lucro de midia; nao desconta taxas do gateway nem custo de produto). ROAS = faturamento dividido pelo investimento; sem investimento no periodo, ROAS indisponivel.
+- Venda sem anuncio identificado nao entra em nenhuma conta: a soma das contas pode ser menor que o faturamento total do painel. Prova na criacao (outubro/2026, 1 a 30): 17 vendas e R$ 5.052,91 atribuidos (Saoliveira 02 com lucro de R$ 307,35 e Saoliveira 01 com R$ 3.824,04 atribuidos) e 3 vendas (R$ 184,00) sem atribuicao, fechando nas 20 vendas e R$ 5.236,91 do periodo.
+- Estado vazio: "Sem dados no periodo."
