@@ -138,4 +138,7 @@
  .v2-editor-canvas article table{display:block;max-width:100%;overflow-x:auto}
  .v2-donut{flex-direction:column}
 }
-
+@media(max-width:760px){
+ .v2-donut{align-items:stretch}
+ .v2-donut-chart{flex:none;width:100%;height:200px}
+}
