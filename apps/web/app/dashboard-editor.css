@@ -130,3 +130,12 @@
 @keyframes v2spin{to{transform:rotate(360deg)}}
 .v2-skel{height:12px;border-radius:6px;background:#1d1d21;animation:v2pulse 1.3s ease-in-out infinite}
 @keyframes v2pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@media(max-width:760px){
+ .v2-main-canonical{padding:0 12px 32px}
+ .v2-filterbar{display:flex;flex-wrap:wrap;gap:8px}
+ .v2-filterbar>*{flex:1 1 150px;min-width:0}
+ .v2-filterbar select,.v2-filterbar input{max-width:100%;width:100%}
+ .v2-editor-canvas article table{display:block;max-width:100%;overflow-x:auto}
+ .v2-donut{flex-direction:column}
+}
+

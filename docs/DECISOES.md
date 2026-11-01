@@ -2245,3 +2245,16 @@ integracao deixam de apontar para os dominios da Railway e passam
 para o dominio proprio. A URI nova da Meta foi registrada no
 aplicativo antes da troca, mantendo a antiga durante a transicao.
 
+## D-157 - Painel utilizavel no celular: cards empilhados e menu em barra superior
+
+No celular, a grade de 12 colunas do dashboard-v2 passa a
+empilhar os widgets em coluna unica, na ordem visual atual,
+preservando a altura de cada um; arrastar, redimensionar e
+salvar o layout ficam desligados nesse modo, para o layout do
+desktop nunca ser sobrescrito pela pilha. O menu lateral vira
+uma barra superior fixa com botao de abrir e fechar: os grupos
+de navegacao abrem num painel sob a barra e tocar num link
+fecha o painel. A barra de filtros do dashboard-v2 quebra em
+linhas e as tabelas dos widgets rolam na horizontal dentro do
+proprio cartao.
+
