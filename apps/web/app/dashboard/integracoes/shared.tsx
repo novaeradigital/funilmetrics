@@ -209,11 +209,11 @@ export function IntegrationForm({ provider, title, projectId, current, disabled 
         <label>Client Secret<input disabled={disabled} name="client_secret" placeholder={current?.has_secret ? "•••••••••••• (substituir)" : "Segredo OAuth"} type="password" /></label>
         <label>Chave do Google Picker<input disabled={disabled} name="picker_api_key" placeholder={current?.has_secret ? "•••••••••••• (substituir)" : "Chave de API"} type="password" /></label>
         <label>Número do projeto Google Cloud<input defaultValue={String(config.projectNumber ?? "317868680348")} disabled={disabled} name="project_number" inputMode="numeric" /></label>
-        <small>Redirect URI: https://web-production-a818d.up.railway.app/dashboard/integracoes/google-drive/callback</small>
+        <small>Redirect URI: https://app.funilmetrics.site/dashboard/integracoes/google-drive/callback</small>
       </> : provider === "meta_ads_app" ? <>
         <label>App ID<input defaultValue={String(config.appId ?? "")} disabled={disabled} name="app_id" inputMode="numeric" /></label>
         <label>App Secret<input disabled={disabled} name="app_secret" placeholder={current?.has_secret ? "•••••••••••• (substituir)" : "Segredo do app Meta"} type="password" /></label>
-        <small>Redirect URI: https://web-production-a818d.up.railway.app/dashboard/integracoes/meta/callback</small>
+        <small>Redirect URI: https://app.funilmetrics.site/dashboard/integracoes/meta/callback</small>
         <small>Escopos de leitura: ads_read e business_management.</small>
         {current?.has_secret ? <Link className="secondary-button" href={`/dashboard/integracoes/meta/connect?projectId=${projectId}`}>Conectar conta via OAuth</Link> : null}
       </> : provider === "meta_ads" ? <>

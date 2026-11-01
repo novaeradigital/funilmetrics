@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { decryptIntegrationSecret, loadIntegrationVaultKey } from "./integration-vault";
 
 export const metaOAuthRedirectUri =
-  "https://web-production-a818d.up.railway.app/dashboard/integracoes/meta/callback";
+  "https://app.funilmetrics.site/dashboard/integracoes/meta/callback";
 
 export async function loadMetaAppConfig(pool:Pool,projectId:string){
   const result=await pool.query<{

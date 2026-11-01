@@ -77,7 +77,7 @@ export async function saveIntegrationConfiguration(formData: FormData) {
     secrets.pickerApiKey = pickerApiKey;
     configuration.projectNumber = projectNumber;
     configuration.redirectUri =
-      "https://web-production-a818d.up.railway.app/dashboard/integracoes/google-drive/callback";
+      "https://app.funilmetrics.site/dashboard/integracoes/google-drive/callback";
     configuration.scope = "drive.readonly";
   } else if (provider === "meta_ads_app") {
     const appSecret = field(formData, "app_secret", 500);
@@ -89,7 +89,7 @@ export async function saveIntegrationConfiguration(formData: FormData) {
     configuration.appId = appId;
     configuration.authorizationMode = "oauth_app";
     configuration.redirectUri =
-      "https://web-production-a818d.up.railway.app/dashboard/integracoes/meta/callback";
+      "https://app.funilmetrics.site/dashboard/integracoes/meta/callback";
     configuration.scopes = "ads_read,business_management";
   } else if (provider === "meta_ads") {
     const accessToken = field(formData, "access_token", 1000);

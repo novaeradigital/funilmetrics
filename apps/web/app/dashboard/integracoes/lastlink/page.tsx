@@ -172,7 +172,7 @@ export default async function LastlinkIntegrationsPage({
 
   const apiBase =
     process.env.NEXT_PUBLIC_API_URL ??
-    "https://api-production-682c.up.railway.app";
+    "https://api.funilmetrics.site";
   const createdUrl =
     params.status === "created" && params.publicId
       ? `${apiBase}/webhooks/lastlink/${params.publicId}`

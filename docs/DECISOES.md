@@ -2234,3 +2234,14 @@ linha do pedido (que e unica por desenho) e preenche o id externo
 na atualizacao quando a confirmacao o traz. Eventos em quarentena
 por esse erro voltam para a fila e normalizam.
 
+## D-156 - Enderecos oficiais no dominio funilmetrics.site (virada da Railway para a VPS)
+
+Na migracao do painel e da API para a VPS em Sao Paulo, os
+enderecos oficiais passam a ser app.funilmetrics.site (painel) e
+api.funilmetrics.site (API). A URI de retorno do OAuth da Meta e a
+do Google Drive, os textos que exibem essas URIs nas telas de
+integracao e os enderecos reserva da API nas paginas de
+integracao deixam de apontar para os dominios da Railway e passam
+para o dominio proprio. A URI nova da Meta foi registrada no
+aplicativo antes da troca, mantendo a antiga durante a transicao.
+

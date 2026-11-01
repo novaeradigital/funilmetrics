@@ -12,7 +12,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{status?
   count(e.id)::int events,max(e.received_at)::text last_event_at from public.tracking_sources s
   left join public.tracking_events e on e.tracking_source_id=s.id where s.project_id=$1
   group by s.id order by s.created_at desc`,[project.id])).rows;
- const api=process.env.NEXT_PUBLIC_API_URL??"https://api-production-682c.up.railway.app";
+ const api=process.env.NEXT_PUBLIC_API_URL??"https://api.funilmetrics.site";
  return <main className="app-layout"><DashboardSidebar activeHref="/dashboard/integracoes/tracking" footerLabel="Tracking próprio"/>
  <section className="app-content"><DashboardTopbar returnTo="/dashboard/integracoes/tracking" statusLabel="Configuração de tracking"/><div className="dashboard-main">
  {params.status?<div className={["created","updated"].includes(params.status)?"notice notice-success":"notice notice-error"}>
