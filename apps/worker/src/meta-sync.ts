@@ -446,7 +446,7 @@ export async function processMetaSync(pool:pg.Pool,maxAttempts:number){
       [run.organization_id,run.project_id,run.connection_id,JSON.stringify({
         accountCount:counts.accounts,campaignCount:counts.campaigns,
         adSetCount:counts.adSets,adCount:counts.ads,creativeCount:counts.creatives,
-        insightCount:counts.insights,graphVersion,insightWindowDays:quick?3:30,syncScope:run.sync_scope,
+        insightCount:counts.insights,graphVersion,insightWindowDays:run.sync_scope==="insights"?3:30,syncScope:run.sync_scope,
         executionMode:"automatic",
       })],
     );
