@@ -14,9 +14,9 @@ const allowedKinds=new Set([
  "region_sales","ad_performance","recent_sales",
  "product_sales_donut","payment_method_sales","payment_method_approval","sales_table",
 ]);
-const granularities=new Set(["daily","weekly","monthly"]),comparisons=new Set(["previous","none"]),chartTypes=new Set(["composed","bars","lines"]),sorts=new Set(["desc","asc"]);
+const granularities=new Set(["daily","weekly","monthly"]),comparisons=new Set(["previous","none"]),chartTypes=new Set(["composed","bars","lines"]),sorts=new Set(["desc","asc"]),formats=new Set(["donut","ranking"]);
 const governedMetrics=new Set(["meta_impressions","meta_link_clicks","meta_landing_page_views","meta_view_content","meta_add_to_cart","meta_initiate_checkout","pending_payments","approved_payments","gross_revenue"]);
-type WidgetConfig={title?:string;description?:string;granularity?:string;comparison?:string;metrics?:string[];legend?:boolean;tooltip?:boolean;chartType?:string;sort?:string;limit?:number;primaryColor?:string;secondaryColor?:string};
+type WidgetConfig={title?:string;description?:string;granularity?:string;comparison?:string;metrics?:string[];legend?:boolean;tooltip?:boolean;chartType?:string;format?:string;sort?:string;limit?:number;primaryColor?:string;secondaryColor?:string};
 type LayoutRow={id:string;kind:string;displayOrder:number;gridWidth:number;gridHeight:number;gridX:number;gridY:number;config:WidgetConfig};
 
 function sanitizeConfig(value:unknown):WidgetConfig{
@@ -27,7 +27,7 @@ function sanitizeConfig(value:unknown):WidgetConfig{
  return {...(title.length>=2?{title}:{}),...(description?{description}:{}),...(granularities.has(String(source.granularity))?{granularity:String(source.granularity)}:{}),
   ...(comparisons.has(String(source.comparison))?{comparison:String(source.comparison)}:{}),...(metrics.length?{metrics}:{}),
   ...(typeof source.legend==="boolean"?{legend:source.legend}:{}),...(typeof source.tooltip==="boolean"?{tooltip:source.tooltip}:{}),
-  ...(chartTypes.has(String(source.chartType))?{chartType:String(source.chartType)}:{}),...(sorts.has(String(source.sort))?{sort:String(source.sort)}:{}),
+  ...(chartTypes.has(String(source.chartType))?{chartType:String(source.chartType)}:{}),...(formats.has(String(source.format))?{format:String(source.format)}:{}),...(sorts.has(String(source.sort))?{sort:String(source.sort)}:{}),
   ...(Number.isInteger(Number(source.limit))?{limit:Math.min(20,Math.max(1,Number(source.limit)))}:{}),...(color(source.primaryColor)?{primaryColor:color(source.primaryColor)}:{}),...(color(source.secondaryColor)?{secondaryColor:color(source.secondaryColor)}:{})};
 }
 
