@@ -6401,3 +6401,9 @@ body:has(.manager-column-resizer:active){cursor:col-resize;user-select:none}
 .ma-cal-tz { color: rgb(226 240 233 / 40%); font-size: 0.72rem; }
 .ma-cal-cancel { margin-left: auto; background: none; border: 1px solid rgb(138 189 164 / 30%); color: inherit; border-radius: 8px; font: inherit; font-size: 0.82rem; padding: 6px 14px; cursor: pointer; }
 @media (max-width: 900px) { .ma-pop-date { flex-direction: column; } .ma-cal-months { flex-wrap: wrap; } .ma-pop { max-width: calc(100vw - 40px); overflow-x: auto; } }
+/* Barra de filtros: caixas uniformes e cores proprias da barra (D-161) */
+.ma-filterbar .ma-pill, .ma-filterbar .ma-apply { box-sizing: border-box; height: 38px; padding-top: 0; padding-bottom: 0; }
+.ma-filterbar .ma-pill { font-weight: 600; }
+.ma-filterbar button.ma-pill { background: rgb(255 255 255 / 4%); color: inherit; }
+.ma-filterbar button.ma-apply { background: #24d689; color: #04120b; }
+.ma-filterbar .ma-pill select, .ma-filterbar .ma-pill input { line-height: 1.2; }
