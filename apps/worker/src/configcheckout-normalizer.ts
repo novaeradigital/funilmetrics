@@ -142,6 +142,8 @@ export function normalizeConfigCheckoutEvent(input: {
   const email = normalizedEmail(buyer?.email);
   const orderToken = text(order?.token);
   const productName = text(product?.name);
+  const kit = object(order?.kit);
+  const kitName = text(kit?.name);
   const productExternalId =
     integer(product?.id) !== undefined
       ? String(integer(product?.id))
@@ -246,6 +248,7 @@ export function normalizeConfigCheckoutEvent(input: {
       ],
     },
     products: [{ externalId: productExternalId, name: productName }],
+    kitName,
     offer: checkout
       ? {
           externalId: `checkout:${integer(checkout.id) ?? text(checkout.id) ?? "principal"}`,

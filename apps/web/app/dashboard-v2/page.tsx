@@ -110,15 +110,16 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
      and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day'
     order by event.occurred_at desc limit 12`,[project.id,from,to,project.timezone]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<{name:string;sales:number;revenue:string}>(`
-   select product.name,count(distinct event.payment_id)::int sales,
+   select coalesce(ord.kit_name,product.name) name,count(distinct event.payment_id)::int sales,
      coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
      from public.normalized_payment_events event
+     join public.commerce_orders ord on ord.id=event.order_id
      join public.commerce_order_items item on item.order_id=event.order_id
      join public.commerce_products product on product.id=item.product_id
     where event.project_id=$1 and event.data_scope='production' and event.sale_financial_effect>0
      and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day'
      and ($5::uuid[] is null or product.id=any($5))
-    group by product.name order by sales desc`,[project.id,from,to,project.timezone,selectedProducts.length?selectedProducts:null]).then(r=>r.rows).catch(()=>[]),
+    group by coalesce(ord.kit_name,product.name) order by sales desc`,[project.id,from,to,project.timezone,selectedProducts.length?selectedProducts:null]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<{method:string|null;sales:number;revenue:string}>(`
    select payment.method,count(distinct event.payment_id)::int sales,
      coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue

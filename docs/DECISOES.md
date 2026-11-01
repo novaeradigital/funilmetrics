@@ -2361,3 +2361,24 @@ e a agenda horaria nao muda.
   product_sales_donut continuam abrindo como rosca (o tipo
   segue aceito no salvamento e no renderizador, so saiu do
   catalogo) e podem trocar de formato pela engrenagem.
+
+## D-164 - Rosca por kit: kit gravado na venda e legenda com vendas
+
+- Contexto: o Fabio pediu a rosca de vendas por produto igual a
+  referencia que ele usa: uma cor por fatia, quantidade no hover
+  e legenda 'N vendas (nome)'. As fatias dele sao os KITS do
+  checkout (1x, 3x, 12x Alivzon), e o kit so existia no payload
+  bruto, fora das vendas normalizadas.
+- Decisao: commerce_orders ganha a coluna kit_name (migracao
+  20261101210000). O normalizador do ConfigCheckout extrai
+  order.kit.name e o processador grava no insert e no update
+  (coalesce) do pedido; backfill unico preencheu os pedidos
+  existentes a partir dos payloads guardados. A base de vendas
+  por produto do Dashboard (rosca, ranking e tabela) agrupa
+  por coalesce(kit_name, nome do produto): venda com kit entra
+  pela fatia do kit, venda sem kit pelo produto. Pedido com
+  itens de mais de um produto e um kit leva todos os itens
+  para a fatia do kit (caso raro, aceito nesta versao).
+- Visual da rosca: centro com TOTAL acima do numero, tooltip
+  'nome: N vendas' e legenda 'N vendas (nome)' com o percentual
+  discreto no fim, uma cor por fatia pela paleta existente.

@@ -143,6 +143,32 @@ describe("normalizeConfigCheckoutEvent", () => {
       }),
     ).toThrow(ConfigCheckoutNormalizationBlocked);
   });
+  it("extrai o nome do kit quando o pedido tem kit", () => {
+    const body = envelope();
+    (body.order as Record<string, unknown>).kit = {
+      name: "3x Exemplo",
+      quantity: 3,
+    };
+    const result = normalizeConfigCheckoutEvent({
+      rawEventId: "raw-kit",
+      externalEventId: "evt-kit",
+      idempotencyKey: "key-kit",
+      receivedAt: new Date("2026-10-30T12:15:00Z"),
+      body,
+    });
+    expect(result.kitName).toBe("3x Exemplo");
+  });
+
+  it("kitName fica indefinido quando o pedido nao tem kit", () => {
+    const result = normalizeConfigCheckoutEvent({
+      rawEventId: "raw-sem-kit",
+      externalEventId: "evt-sem-kit",
+      idempotencyKey: "key-sem-kit",
+      receivedAt: new Date("2026-10-30T12:15:00Z"),
+      body: envelope(),
+    });
+    expect(result.kitName).toBeUndefined();
+  });
 });
 
 

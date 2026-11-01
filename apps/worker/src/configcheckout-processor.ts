@@ -247,10 +247,10 @@ async function processCandidate(
         `insert into public.commerce_orders (
            organization_id, project_id, connection_id, person_id, offer_id,
            data_scope, external_key, status, original_amount, paid_amount,
-           occurred_at, occurred_at_raw, occurred_at_basis
+           occurred_at, occurred_at_raw, occurred_at_basis, kit_name
          )
          values (
-           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
          )
          returning id`,
         [
@@ -267,6 +267,7 @@ async function processCandidate(
           normalized.occurredAt,
           normalized.occurredAtRaw ?? null,
           normalized.occurredAtBasis,
+          normalized.kitName ?? null,
         ],
       );
       orderId = inserted.rows[0]!.id;
@@ -284,6 +285,7 @@ async function processCandidate(
                 status = $4,
                 original_amount = coalesce($5, original_amount),
                 paid_amount = coalesce($6, paid_amount),
+                kit_name = coalesce($7, kit_name),
                 updated_at = now()
           where id = $1`,
         [
@@ -293,6 +295,7 @@ async function processCandidate(
           nextStatus,
           money(normalized.originalAmount),
           money(normalized.paidAmount),
+          normalized.kitName ?? null,
         ],
       );
     }
