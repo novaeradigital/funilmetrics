@@ -34,18 +34,9 @@ export type BestAdViewRow = {
   p75Rate: number | null;
 };
 
-export type FunnelTotals = {
-  impressions: number;
-  linkClicks: number;
-  pageViews: number;
-  checkouts: number;
-  sales: number;
-};
-
 type Props = {
   rows: BestAdViewRow[];
   totalAds: number;
-  funnel: FunnelTotals;
   currency: string;
 };
 
@@ -114,7 +105,7 @@ function FunnelSteps({
   );
 }
 
-export function MelhoresAnunciosClient({ rows, totalAds, funnel, currency }: Props) {
+export function MelhoresAnunciosClient({ rows, totalAds, currency }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const money = useMemo(
@@ -127,27 +118,8 @@ export function MelhoresAnunciosClient({ rows, totalAds, funnel, currency }: Pro
   const podium = sorted.slice(0, 3);
   const expandedId = expanded ?? sorted[0]?.adId ?? null;
 
-  const funnelSteps = [
-    { label: "Impressões", value: funnel.impressions },
-    { label: "Cliques no link", value: funnel.linkClicks },
-    { label: "Visualizações da página", value: funnel.pageViews },
-    { label: "Checkouts iniciados", value: funnel.checkouts },
-    { label: "Vendas", value: funnel.sales },
-  ];
-
   return (
     <>
-      <section className="dashboard-card">
-        <header className="card-header">
-          <div>
-            <p className="panel-label">Funil invertido do período</p>
-            <h2>Da impressão à venda</h2>
-          </div>
-          <span className="ma-note">Etapas da Meta; a última é a venda real atribuída</span>
-        </header>
-        <FunnelSteps steps={funnelSteps} number={number} />
-      </section>
-
       {podium.length > 0 ? (
         <section className="ma-podium" aria-label="Três melhores anúncios">
           {podium.map((row, index) => (

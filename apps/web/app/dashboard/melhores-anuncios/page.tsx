@@ -19,7 +19,6 @@ import {
 import {
   MelhoresAnunciosClient,
   type BestAdViewRow,
-  type FunnelTotals,
 } from "./melhores-anuncios-client";
 import { MelhoresAnunciosFilters } from "./melhores-anuncios-filters";
 
@@ -257,14 +256,6 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
       };
     });
 
-    const funnel: FunnelTotals = {
-      impressions: rows.reduce((sum, row) => sum + row.impressions, 0),
-      linkClicks: rows.reduce((sum, row) => sum + row.linkClicks, 0),
-      pageViews: rows.reduce((sum, row) => sum + row.pageViews, 0),
-      checkouts: rows.reduce((sum, row) => sum + row.checkouts, 0),
-      sales: rows.reduce((sum, row) => sum + row.sales, 0),
-    };
-
     const sorted = sortBestAds(rows, sort);
     const visible = sorted.filter((row) => row.spend >= minSpend || row.sales > 0);
 
@@ -304,7 +295,6 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
             <MelhoresAnunciosClient
               rows={visible}
               totalAds={rows.length}
-              funnel={funnel}
               currency={project.currency}
             />
             {organic.sales > 0 ? (
