@@ -4,7 +4,7 @@ import {markMetaAuthorizationExpired,refreshMetaOAuthTokenIfNeeded} from "./meta
 
 const graphVersion="v25.0";
 type Run={id:string;organization_id:string;project_id:string;connection_id:string;
-  attempts:number;configuration:Record<string,unknown>};
+  attempts:number;sync_scope:string;configuration:Record<string,unknown>};
 type Counts={accounts:number;campaigns:number;adSets:number;ads:number;
   creatives:number;insights:number};
 
@@ -52,7 +52,7 @@ async function claim(pool:pg.Pool){
     await client.query("begin");
     const result=await client.query<Run>(
       `select run.id,run.organization_id,run.project_id,run.connection_id,
-              run.attempts,connection.configuration
+              run.attempts,run.sync_scope,connection.configuration
          from public.meta_sync_runs run
          join public.connections connection on connection.id=run.connection_id
         where run.status in ('queued','failed_retryable')
@@ -121,6 +121,7 @@ async function synchronize(pool:pg.Pool,run:Run){
   if(!allowlist.length)throw new Error("meta_allowlist_empty");
   const graph=graphClient(token);
   const counts:Counts={accounts:0,campaigns:0,adSets:0,ads:0,creatives:0,insights:0};
+  const quick=run.sync_scope==="insights";
   for(const accountId of allowlist){
     const account=await graph.read(
       `${encodeURIComponent(accountId)}?fields=id,name,account_status,currency,timezone_name`);
@@ -159,7 +160,7 @@ async function synchronize(pool:pg.Pool,run:Run){
        ) fresh`,
       [run.project_id,localAccountId],
     )).rows[0]?.fresh??false;
-    if(!catalogFresh){
+    if(!catalogFresh&&!quick){
     const campaigns=await graph.readAll(
       `${encodeURIComponent(accountId)}/campaigns?fields=id,name,status,effective_status,objective,daily_budget,lifetime_budget`);
     for(const campaign of campaigns){
@@ -262,7 +263,7 @@ async function synchronize(pool:pg.Pool,run:Run){
     // explicit inclusive range is required for intraday spend reconciliation.
     // Recent dates are intentionally fetched again because Meta can revise them.
     const insightRange=metaInsightTimeRange(
-      new Date(),String(account.timezone_name??"UTC"),30,
+      new Date(),String(account.timezone_name??"UTC"),quick?3:30,
     );
     const insights=await graph.readAll(
       `${encodeURIComponent(accountId)}/insights?fields=campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,spend,impressions,reach,clicks,actions,action_values&level=ad&time_increment=1&time_range=${encodeURIComponent(JSON.stringify(insightRange))}`);
@@ -445,13 +446,13 @@ export async function processMetaSync(pool:pg.Pool,maxAttempts:number){
       [run.organization_id,run.project_id,run.connection_id,JSON.stringify({
         accountCount:counts.accounts,campaignCount:counts.campaigns,
         adSetCount:counts.adSets,adCount:counts.ads,creativeCount:counts.creatives,
-        insightCount:counts.insights,graphVersion,insightWindowDays:30,
+        insightCount:counts.insights,graphVersion,insightWindowDays:quick?3:30,syncScope:run.sync_scope,
         executionMode:"automatic",
       })],
     );
     return {claimed:1,completed:1,failed:0};
   }catch(error){
-    const canRetry=retryable(error)&&run.attempts<maxAttempts;
+    const canRetry=run.sync_scope!=="insights"&&retryable(error)&&run.attempts<maxAttempts;
     const retryDelaySeconds=Math.min(3600,60*(2**Math.max(0,run.attempts-1)));
     let finalErrorCode=errorCode(error);
     if(finalErrorCode==="meta_http_401"){

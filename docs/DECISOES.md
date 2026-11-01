@@ -2267,3 +2267,20 @@ principal em producao (checkout proprio) nao envia comissao, o
 padrao anterior escondia as vendas e marcava os indicadores
 como indisponiveis a cada abertura do painel.
 
+## D-159 - Sincronizacao rapida da Meta disparada pelo painel (so numeros)
+
+As execucoes de sincronizacao ganham escopo (coluna
+sync_scope): 'full', o comportamento historico (catalogo e 30
+dias de insights), e 'insights', que busca so os numeros dos
+ultimos 3 dias, sem catalogo, e nao tenta de novo em caso de
+falha (a agenda horaria completa segue como rede de seguranca).
+O painel dispara o escopo rapido em tres momentos: no botao
+Atualizar (forcado, com espera de ate 20 segundos pelo
+resultado antes de recarregar), na troca de filtros e na
+abertura das paginas de dashboard quando o periodo alcanca
+hoje ou ontem. Uma trava impede disparos repetidos em menos
+de 5 minutos por conexao (1 minuto no botao), e nenhuma
+execucao nova entra se ja houver uma ativa. A abertura do
+painel continua enfileirando a completa quando desatualizada,
+e a agenda horaria nao muda.
+

@@ -5,6 +5,7 @@ import {redirect} from "next/navigation";
 import {getActiveProject} from "../../lib/active-project";
 import {getDatabase} from "../../lib/database";
 import {createClient} from "../../lib/supabase/server";
+import {queueQuickMetaSync,waitForMetaSyncRuns} from "../../lib/meta-sync-queue";
 
 const marker="[funil-metrics:dashboard-v2]";
 const allowedKinds=new Set([
@@ -112,32 +113,10 @@ export async function queueDashboardMetaSync(formData:FormData){
  const supabase=await createClient(),{data}=await supabase.auth.getUser();if(!data.user)redirect("/login");
  const {project}=await getActiveProject(data.user.id);if(!project)redirect("/dashboard/projetos");
  if(!new Set(["owner","administrator"]).has(project.role))redirect(`${safeReturn}${suffix}status=meta-sync-forbidden`);
- const database=getDatabase(),client=await database.pool.connect();
- try{
-  await client.query("begin");
-  const actor=(await client.query<{id:string}>(`select id from public.users where auth_user_id=$1 and status='active' limit 1`,[data.user.id])).rows[0];
-  if(!actor)throw new Error("actor_missing");
-  const connections=(await client.query<{id:string}>(`select connection.id from public.connections connection
-   join public.meta_authorizations meta_authorization on meta_authorization.connection_id=connection.id
-   where connection.project_id=$1 and connection.organization_id=$2 and connection.provider='meta_ads'
-   and connection.status='active' and meta_authorization.status='active'`,[project.id,project.organization_id])).rows;
-  for(const connection of connections){
-   const run=(await client.query<{id:string}>(`insert into public.meta_sync_runs(
-    organization_id,project_id,connection_id,idempotency_key,status,scheduled_for,next_attempt_at)
-    select $1,$2,$3,'dashboard:'||$3::text||':'||to_char(now() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI'),
-    'queued',now(),now() where not exists(select 1 from public.meta_sync_runs active
-     where active.connection_id=$3 and active.status in ('queued','running','failed_retryable'))
-    on conflict(connection_id,idempotency_key) do nothing returning id`,
-   [project.organization_id,project.id,connection.id])).rows[0];
-   if(run)await client.query(`insert into public.audit_logs(organization_id,project_id,actor_user_id,
-    action,target_type,target_id,after) values($1,$2,$3,'meta_sync_requested','meta_sync_run',$4,
-    jsonb_build_object('connectionId',$5::text,'mode','dashboard_manual'))`,
-   [project.organization_id,project.id,actor.id,run.id,connection.id]);
-  }
-  await client.query("commit");
- }catch(error){await client.query("rollback");console.error("dashboard_meta_sync_queue_failed",error);
-  redirect(`${safeReturn}${suffix}status=meta-sync-failed`)
- }finally{client.release()}
+ const force=String(formData.get("refresh")??"")==="1";
+ const database=getDatabase();
+ const runIds=await queueQuickMetaSync(database.pool,{organizationId:project.organization_id,projectId:project.id,authUserId:data.user.id,force}).catch(()=>[] as string[]);
+ if(force)await waitForMetaSyncRuns(database.pool,runIds).catch(()=>undefined);
  revalidatePath("/dashboard-v2");
  redirect(`${safeReturn}${suffix}status=meta-sync-queued`);
 }

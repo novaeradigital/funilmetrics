@@ -6,7 +6,7 @@ import { DashboardTopbar } from "../dashboard-topbar";
 import { getDatabase } from "../../../lib/database";
 import { createClient } from "../../../lib/supabase/server";
 import { getActiveProject } from "../../../lib/active-project";
-import { queueMetaSyncIfStale } from "../../../lib/meta-sync-queue";
+import { queueMetaSyncIfStale, queueQuickMetaSync } from "../../../lib/meta-sync-queue";
 import {
   computeDerived,
   dddToUf,
@@ -148,7 +148,7 @@ export default async function DashboardInteligentePage({ searchParams }: PagePro
 
   const project = active.project;
   const database = getDatabase();
-  after(async () => { await queueMetaSyncIfStale(database.pool, { organizationId: project.organization_id, projectId: project.id, authUserId: authData.user.id }).catch(() => 0); });
+  after(async () => { await queueMetaSyncIfStale(database.pool, { organizationId: project.organization_id, projectId: project.id, authUserId: authData.user.id }).catch(() => 0); await queueQuickMetaSync(database.pool, { organizationId: project.organization_id, projectId: project.id, authUserId: authData.user.id }).catch(() => []); });
   const userId = authData.user.id;
   const days = period.days;
 
