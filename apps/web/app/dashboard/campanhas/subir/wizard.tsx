@@ -1,0 +1,274 @@
+"use client";
+import {useMemo,useState,useTransition} from "react";
+import {createUpload,saveTemplate,generateCopies} from "./actions";
+import {expandStructure,resolveNamingPattern,buildUtmQuery,type NamingContext} from "../../../../lib/campaign-naming";
+
+export type WizardAccount={id:string;externalId:string;name:string;currency:string|null};
+export type WizardCreative={id:string;name:string;format:string;mimeType:string;transcript:string|null};
+export type WizardTemplate={id:string;name:string;config:Record<string,unknown>};
+type CopyModel={primaryText:string;headline:string;cta:string};
+type DestinationState={pageId:string;instagramId:string;pixelId:string;event:string};
+
+const OBJECTIVES=["OUTCOME_SALES","OUTCOME_LEADS","OUTCOME_TRAFFIC","OUTCOME_ENGAGEMENT","OUTCOME_AWARENESS"];
+const EVENTS=["Purchase","Lead","CompleteRegistration","InitiateCheckout","ViewContent"];
+
+export function UploadWizard({accounts,creatives,templates,products}:{
+ accounts:WizardAccount[];creatives:WizardCreative[];templates:WizardTemplate[];products:string[];
+}){
+ const [step,setStep]=useState(1);
+ const [selectedAccounts,setSelectedAccounts]=useState<string[]>([]);
+ const [destinations,setDestinations]=useState<Record<string,DestinationState>>({});
+ const [selectedCreatives,setSelectedCreatives]=useState<string[]>([]);
+ const [productName,setProductName]=useState(products[0]??"");
+ const [preset,setPreset]=useState("1-3-1");
+ const [structure,setStructure]=useState({campaigns:1,adSetsPerCampaign:3,adsPerAdSet:1,duplications:1,distribution:"rotate" as "rotate"|"sequence"|"all"});
+ const [adSet,setAdSet]=useState({objective:"OUTCOME_SALES",budgetLevel:"adset" as "campaign"|"adset",dailyBudget:50,countries:"BR",ageMin:18,ageMax:65,gender:"all",destinationUrl:""});
+ const [naming,setNaming]=useState({campaignPattern:"{produto} | {pais} | {data}",adSetPattern:"{publico} | {pais}",adPattern:"{criativo}",separator:"_",casing:"original" as "original"|"upper"|"lower",dateFormat:"YYYYMMDD"});
+ const [utms,setUtms]=useState({utm_source:"facebook",utm_medium:"cpc",utm_campaign:"{campanha}",utm_content:"{criativo}",utm_term:""});
+ const [copyMode,setCopyMode]=useState<"global"|"per_creative">("global");
+ const [generated,setGenerated]=useState<Record<string,CopyModel[]>>({});
+ const [chosen,setChosen]=useState<Record<string,number>>({});
+ const [edited,setEdited]=useState<Record<string,CopyModel>>({});
+ const [copyError,setCopyError]=useState("");
+ const [pending,startTransition]=useTransition();
+
+ const creativeById=useMemo(()=>new Map(creatives.map(c=>[c.id,c])),[creatives]);
+ const selectedCreativeObjs=selectedCreatives.map(id=>creativeById.get(id)).filter(Boolean) as WizardCreative[];
+
+ function applyPreset(value:string){
+  setPreset(value);
+  if(value==="1-3-1")setStructure(s=>({...s,campaigns:1,adSetsPerCampaign:3,adsPerAdSet:1}));
+  if(value==="1-1-1")setStructure(s=>({...s,campaigns:1,adSetsPerCampaign:1,adsPerAdSet:1}));
+ }
+ function toggleAccount(externalId:string){
+  setSelectedAccounts(prev=>prev.includes(externalId)?prev.filter(a=>a!==externalId):[...prev,externalId]);
+  setDestinations(prev=>prev[externalId]?prev:{...prev,[externalId]:{pageId:"",instagramId:"",pixelId:"",event:"Purchase"}});
+ }
+ function toggleCreative(id:string){
+  setSelectedCreatives(prev=>prev.includes(id)?prev.filter(c=>c!==id):[...prev,id]);
+ }
+ const namingOpts={separator:naming.separator,casing:naming.casing,dateFormat:naming.dateFormat as never};
+ function baseContext(accountName:string):NamingContext{
+  return {produto:productName||undefined,pais:adSet.countries||undefined,data:new Date(),
+   conta:accountName,objetivo:adSet.objective,orcamento:adSet.dailyBudget,publico:undefined};
+ }
+ const preview=useMemo(()=>{
+  if(!selectedAccounts.length||!selectedCreativeObjs.length)return {rows:[] as Array<Record<string,string>>,duplicates:0,totalAds:0};
+  const account=accounts.find(a=>a.externalId===selectedAccounts[0]);
+  const slots=expandStructure(structure,selectedCreativeObjs.length);
+  const rows=slots.slice(0,30).map(slot=>{
+   const creative=selectedCreativeObjs[slot.creativeIndex]!;
+   const ctx={...baseContext(account?.name??""),criativo:creative.name,formato:creative.format,sequencia:slot.sequence};
+   const campaign=resolveNamingPattern(naming.campaignPattern,ctx,namingOpts);
+   const adset=resolveNamingPattern(naming.adSetPattern,ctx,namingOpts);
+   const ad=resolveNamingPattern(naming.adPattern,ctx,namingOpts);
+   const utmQuery=buildUtmQuery({utm_source:utms.utm_source,utm_medium:utms.utm_medium,
+    utm_campaign:utms.utm_campaign.replaceAll("{campanha}",campaign),
+    utm_content:utms.utm_content.replaceAll("{anuncio}",ad),utm_term:utms.utm_term},ctx,namingOpts);
+   return {campaign,adset,ad,creative:creative.name,
+    url:utmQuery?`${adSet.destinationUrl}${adSet.destinationUrl.includes("?")?"&":"?"}${utmQuery}`:adSet.destinationUrl};
+  });
+  const names=new Set(rows.map(r=>r.ad));
+  return {rows,duplicates:rows.length-names.size,totalAds:slots.length*selectedAccounts.length};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[selectedAccounts,selectedCreativeObjs,structure,naming,utms,adSet,productName]);
+
+ function currentConfig(){
+  return {
+   version:"campaign_upload_v1",
+   destinations:selectedAccounts.map(ext=>{
+    const account=accounts.find(a=>a.externalId===ext)!;
+    const d=destinations[ext]??{pageId:"",instagramId:"",pixelId:"",event:"Purchase"};
+    return {accountId:account.id,accountExternalId:ext,accountName:account.name,...d};
+   }),
+   creatives:selectedCreativeObjs.map(c=>({id:c.id,name:c.name,format:c.format,transcript:c.transcript})),
+   structure,adSet,naming,utms,productName,
+   copies:{mode:copyMode,
+    global:copyMode==="global"?edited["__global"]:undefined,
+    perCreative:copyMode==="per_creative"?Object.fromEntries(
+     selectedCreativeObjs.filter(c=>edited[c.id]).map(c=>[c.id,edited[c.id]!])):undefined},
+  };
+ }
+ function runGenerate(){
+  setCopyError("");
+  startTransition(async()=>{
+   const items=copyMode==="global"
+    ? [{creativeId:"__global",name:selectedCreativeObjs[0]?.name??"geral",transcript:selectedCreativeObjs[0]?.transcript??null}]
+    : selectedCreativeObjs.map(c=>({creativeId:c.id,name:c.name,transcript:c.transcript}));
+   const result=await generateCopies({productName,items});
+   if(!result.ok){setCopyError(result.error??"Falha na geracao.");return;}
+   setGenerated(result.copies??{});
+   const nextChosen:Record<string,number>={};const nextEdited:Record<string,CopyModel>={...edited};
+   for(const [key,list] of Object.entries(result.copies??{})){
+    nextChosen[key]=0;if(list[0])nextEdited[key]=list[0];
+   }
+   setChosen(nextChosen);setEdited(nextEdited);
+  });
+ }
+ function copyEditor(scopeKey:string,label:string){
+  const list=generated[scopeKey]??[];
+  const current=edited[scopeKey];
+  return <fieldset key={scopeKey} style={{border:"1px solid #ddd",borderRadius:8,padding:12,marginBottom:12}}>
+   <legend>{label}</legend>
+   {!list.length?<p>Nenhum modelo gerado ainda.</p>:list.map((copy,index)=>
+    <label key={index} style={{display:"block",marginBottom:6}}>
+     <input type="radio" name={`copy-${scopeKey}`} checked={(chosen[scopeKey]??0)===index}
+      onChange={()=>{setChosen(p=>({...p,[scopeKey]:index}));setEdited(p=>({...p,[scopeKey]:list[index]!}));}}/>
+     {` Modelo ${index+1}: ${copy.headline} (${copy.cta})`}
+    </label>)}
+   {current?<>
+    <label style={{display:"block"}}>Texto principal<textarea rows={3} style={{width:"100%"}} value={current.primaryText}
+     onChange={e=>setEdited(p=>({...p,[scopeKey]:{...current,primaryText:e.target.value}}))}/></label>
+    <label style={{display:"block"}}>Titulo<input style={{width:"100%"}} value={current.headline}
+     onChange={e=>setEdited(p=>({...p,[scopeKey]:{...current,headline:e.target.value}}))}/></label>
+    <label style={{display:"block"}}>Botao (CTA)<input style={{width:"100%"}} value={current.cta}
+     onChange={e=>setEdited(p=>({...p,[scopeKey]:{...current,cta:e.target.value}}))}/></label>
+   </>:null}
+  </fieldset>;
+ }
+ const configJson=JSON.stringify(currentConfig());
+ const canNext=[true,selectedAccounts.length>0,selectedCreatives.length>0,true,Boolean(adSet.destinationUrl)][step]??true;
+
+ return <div>
+  <nav aria-label="Etapas da subida" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+   {["1. Destino","2. Criativos","3. Estrutura","4. Conjunto","5. Copys e revisao"].map((label,index)=>
+    <button key={label} type="button" className={step===index+1?"period-active":"secondary-button"}
+     onClick={()=>setStep(index+1)}>{label}</button>)}
+  </nav>
+
+  {step===1&&<section className="dashboard-card">
+   <h2>Destino</h2>
+   <p>Selecione uma ou varias contas. Pagina, pixel e evento sao por conta.</p>
+   {accounts.map(account=><div key={account.externalId} style={{borderTop:"1px solid #eee",padding:"10px 0"}}>
+    <label><input type="checkbox" checked={selectedAccounts.includes(account.externalId)}
+     onChange={()=>toggleAccount(account.externalId)}/> <strong>{account.name}</strong> ({account.externalId}) {account.currency??""}</label>
+    {selectedAccounts.includes(account.externalId)&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+     <label>Pagina<input value={destinations[account.externalId]?.pageId??""} placeholder="ID da Pagina"
+      onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{instagramId:"",pixelId:"",event:"Purchase"}),pageId:e.target.value}}))}/></label>
+     <label>Instagram<input value={destinations[account.externalId]?.instagramId??""} placeholder="ID do Instagram"
+      onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",pixelId:"",event:"Purchase"}),instagramId:e.target.value}}))}/></label>
+     <label>Pixel<input value={destinations[account.externalId]?.pixelId??""} placeholder="ID do pixel"
+      onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",instagramId:"",event:"Purchase"}),pixelId:e.target.value}}))}/></label>
+     <label>Evento<select value={destinations[account.externalId]?.event??"Purchase"}
+      onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",instagramId:"",pixelId:""}),event:e.target.value}}))}>
+      {EVENTS.map(ev=><option key={ev} value={ev}>{ev}</option>)}</select></label>
+    </div>}
+   </div>)}
+   {!accounts.length&&<p>Nenhuma conta de anuncio sincronizada neste projeto.</p>}
+  </section>}
+
+  {step===2&&<section className="dashboard-card">
+   <h2>Criativos da Biblioteca</h2>
+   <p>Upload manual e link de pasta do Drive entram pela Biblioteca (grupo Criativos). Aqui voce escolhe os criativos prontos.</p>
+   <label>Produto<input list="wizard-products" value={productName} onChange={e=>setProductName(e.target.value)}/></label>
+   <datalist id="wizard-products">{products.map(p=><option key={p} value={p}/>)}</datalist>
+   {creatives.map(creative=><div key={creative.id} style={{borderTop:"1px solid #eee",padding:"8px 0"}}>
+    <label><input type="checkbox" checked={selectedCreatives.includes(creative.id)} onChange={()=>toggleCreative(creative.id)}/>
+    <strong>{creative.name}</strong> ({creative.format}) {creative.transcript?" · com transcricao":" · sem transcricao"}</label>
+   </div>)}
+   {!creatives.length&&<p>Nenhum criativo pronto na Biblioteca deste projeto.</p>}
+  </section>}
+
+  {step===3&&<section className="dashboard-card">
+   <h2>Estrutura</h2>
+   <label>Preset<select value={preset} onChange={e=>applyPreset(e.target.value)}>
+    <option value="1-3-1">1-3-1</option><option value="1-1-1">1-1-1</option><option value="custom">Personalizada</option>
+   </select></label>
+   <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+    <label>Campanhas<input type="number" min={1} value={structure.campaigns} onChange={e=>{setPreset("custom");setStructure(s=>({...s,campaigns:Number(e.target.value)}));}}/></label>
+    <label>Conjuntos por campanha<input type="number" min={1} value={structure.adSetsPerCampaign} onChange={e=>{setPreset("custom");setStructure(s=>({...s,adSetsPerCampaign:Number(e.target.value)}));}}/></label>
+    <label>Anuncios por conjunto<input type="number" min={1} value={structure.adsPerAdSet} onChange={e=>{setPreset("custom");setStructure(s=>({...s,adsPerAdSet:Number(e.target.value)}));}}/></label>
+    <label>Duplicacoes<input type="number" min={1} value={structure.duplications} onChange={e=>setStructure(s=>({...s,duplications:Number(e.target.value)}))}/></label>
+    <label>Distribuicao dos criativos<select value={structure.distribution} onChange={e=>setStructure(s=>({...s,distribution:e.target.value as never}))}>
+     <option value="rotate">Rodizio</option><option value="sequence">Na ordem</option><option value="all">Todos em cada conjunto</option>
+    </select></label>
+   </div>
+   <p>Matriz: {preview.totalAds} anuncio(s) no total, em {selectedAccounts.length} conta(s).</p>
+  </section>}
+
+  {step===4&&<section className="dashboard-card">
+   <h2>Conjunto de anuncios</h2>
+   <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+    <label>Objetivo<select value={adSet.objective} onChange={e=>setAdSet(s=>({...s,objective:e.target.value}))}>
+     {OBJECTIVES.map(o=><option key={o} value={o}>{o}</option>)}</select></label>
+    <label>Orcamento no<select value={adSet.budgetLevel} onChange={e=>setAdSet(s=>({...s,budgetLevel:e.target.value as never}))}>
+     <option value="adset">Conjunto (ABO)</option><option value="campaign">Campanha (CBO)</option></select></label>
+    <label>Orcamento diario<input type="number" min={1} value={adSet.dailyBudget} onChange={e=>setAdSet(s=>({...s,dailyBudget:Number(e.target.value)}))}/></label>
+    <label>Paises<input value={adSet.countries} onChange={e=>setAdSet(s=>({...s,countries:e.target.value}))}/></label>
+    <label>Idade min<input type="number" value={adSet.ageMin} onChange={e=>setAdSet(s=>({...s,ageMin:Number(e.target.value)}))}/></label>
+    <label>Idade max<input type="number" value={adSet.ageMax} onChange={e=>setAdSet(s=>({...s,ageMax:Number(e.target.value)}))}/></label>
+    <label>Genero<select value={adSet.gender} onChange={e=>setAdSet(s=>({...s,gender:e.target.value}))}>
+     <option value="all">Todos</option><option value="female">Feminino</option><option value="male">Masculino</option></select></label>
+    <label style={{flex:1}}>URL de destino<input style={{width:"100%"}} value={adSet.destinationUrl} onChange={e=>setAdSet(s=>({...s,destinationUrl:e.target.value}))}/></label>
+   </div>
+   <h3>Nomenclatura</h3>
+   <label style={{display:"block"}}>Campanha<input style={{width:"100%"}} value={naming.campaignPattern} onChange={e=>setNaming(s=>({...s,campaignPattern:e.target.value}))}/></label>
+   <label style={{display:"block"}}>Conjunto<input style={{width:"100%"}} value={naming.adSetPattern} onChange={e=>setNaming(s=>({...s,adSetPattern:e.target.value}))}/></label>
+   <label style={{display:"block"}}>Anuncio<input style={{width:"100%"}} value={naming.adPattern} onChange={e=>setNaming(s=>({...s,adPattern:e.target.value}))}/></label>
+   <div style={{display:"flex",gap:12}}>
+    <label>Separador<input value={naming.separator} onChange={e=>setNaming(s=>({...s,separator:e.target.value}))}/></label>
+    <label>Caixa<select value={naming.casing} onChange={e=>setNaming(s=>({...s,casing:e.target.value as never}))}>
+     <option value="original">Original</option><option value="upper">Maiusculas</option><option value="lower">Minusculas</option></select></label>
+   </div>
+   <h3>UTMs</h3>
+   <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+    {([["utm_source","Source"],["utm_medium","Medium"],["utm_campaign","Campaign"],["utm_content","Content"],["utm_term","Term"]] as const).map(([key,label])=>
+     <label key={key}>{label}<input value={utms[key]} onChange={e=>setUtms(s=>({...s,[key]:e.target.value}))}/></label>)}
+   </div>
+   <p>Variaveis aceitas: {"{criativo}"}, {"{campanha}"}, {"{anuncio}"}, {"{produto}"}, {"{data}"} e as demais da nomenclatura.</p>
+   {templates.length>0&&<div>
+    <h3>Modelos de subida</h3>
+    <select defaultValue="" onChange={e=>{
+     const template=templates.find(t=>t.id===e.target.value);if(!template)return;
+     const cfg=template.config as {adSet?:typeof adSet;naming?:typeof naming;utms?:typeof utms;structure?:typeof structure};
+     if(cfg.adSet)setAdSet(cfg.adSet);if(cfg.naming)setNaming(cfg.naming);
+     if(cfg.utms)setUtms(cfg.utms);if(cfg.structure)setStructure(cfg.structure);
+    }}>
+     <option value="">Aplicar modelo...</option>
+     {templates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+    </select>
+   </div>}
+   <form action={saveTemplate} style={{marginTop:12}}>
+    <input type="hidden" name="config" value={JSON.stringify({adSet,naming,utms,structure})}/>
+    <label>Nome do modelo<input name="name" required/></label>
+    <button type="submit" className="secondary-button">Salvar como modelo</button>
+   </form>
+  </section>}
+
+  {step===5&&<section className="dashboard-card">
+   <h2>Copys</h2>
+   <label>Modo<select value={copyMode} onChange={e=>setCopyMode(e.target.value as never)}>
+    <option value="global">3 modelos para a subida inteira</option>
+    <option value="per_creative">3 modelos por criativo</option>
+   </select></label>
+   <button type="button" className="secondary-button" disabled={pending||!selectedCreativeObjs.length} onClick={runGenerate}>
+    {pending?"Gerando...":"Gerar 3 modelos com IA"}</button>
+   {copyMode==="global"
+    ? copyEditor("__global","Subida inteira (gerado a partir do primeiro criativo)")
+    : selectedCreativeObjs.map(c=>copyEditor(c.id,c.name))}
+   {copyError&&<p role="alert">{copyError}</p>}
+   <h2>Revisao</h2>
+   {preview.duplicates>0&&<p role="alert">{preview.duplicates} nome(s) de anuncio duplicado(s) na previa. Ajuste a nomenclatura (por exemplo, com {"{sequencia}"}).</p>}
+   <table>
+    <thead><tr><th>Campanha</th><th>Conjunto</th><th>Anuncio</th><th>Criativo</th><th>URL final</th></tr></thead>
+    <tbody>{preview.rows.map((row,index)=><tr key={index}>
+     <td>{row.campaign}</td><td>{row.adset}</td><td>{row.ad}</td><td>{row.creative}</td><td>{row.url}</td>
+    </tr>)}</tbody>
+   </table>
+   {preview.totalAds>preview.rows.length&&<p>Previa com os primeiros {preview.rows.length} de {preview.totalAds} anuncios.</p>}
+   <form action={createUpload}>
+    <input type="hidden" name="config" value={configJson}/>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+     <button type="submit" name="send_mode" value="draft" className="secondary-button">Salvar rascunho</button>
+     <button type="submit" name="send_mode" value="paused">Enviar pausada</button>
+     <button type="submit" name="send_mode" value="active">Enviar ativa</button>
+    </div>
+   </form>
+  </section>}
+
+  <div style={{display:"flex",gap:8,marginTop:16}}>
+   {step>1&&<button type="button" className="secondary-button" onClick={()=>setStep(step-1)}>Voltar</button>}
+   {step<5&&<button type="button" disabled={!canNext} onClick={()=>setStep(step+1)}>Continuar</button>}
+  </div>
+ </div>;
+}

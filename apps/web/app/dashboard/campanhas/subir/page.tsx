@@ -1,18 +1,12 @@
 import {redirect} from "next/navigation";
 import {createClient} from "../../../../lib/supabase/server";
 import {getActiveProject} from "../../../../lib/active-project";
+import {getDatabase} from "../../../../lib/database";
 import {DashboardSidebar} from "../../dashboard-sidebar";
 import {DashboardTopbar} from "../../dashboard-topbar";
+import {UploadWizard,type WizardAccount,type WizardCreative,type WizardTemplate} from "./wizard";
 
 export const dynamic="force-dynamic";
-
-const steps=[
- {title:"1. Destino",text:"Contas de anúncio, Página e perfil de Instagram de cada conta."},
- {title:"2. Criativos",text:"Da Biblioteca, de upload manual ou de uma pasta do Drive."},
- {title:"3. Estrutura",text:"Presets 1-3-1 e 1-1-1 ou estrutura personalizada, com duplicação."},
- {title:"4. Conjunto",text:"Objetivo, pixel e evento, orçamento, público, URL e UTMs, com Modelos de subida salvos."},
- {title:"5. Copys, revisão e publicação",text:"Transcrição, 3 modelos de copy para aprovar, revisão completa e envio pausado ou ativo."},
-];
 
 export default async function SubirCampanhasPage(){
  const supabase=await createClient();
@@ -20,21 +14,39 @@ export default async function SubirCampanhasPage(){
  if(!authData.user)redirect("/login");
  const {project}=await getActiveProject(authData.user.id);
  if(!project)redirect("/dashboard/projetos");
+ const db=getDatabase();
+ const accounts=(await db.pool.query<WizardAccount>(
+  `select id::text,external_id as "externalId",name,currency
+     from public.meta_ad_accounts where project_id=$1 order by name`,[project.id])).rows;
+ const creativeRows=(await db.pool.query<WizardCreative&{mimeType:string}>(
+  `select c.id::text,c.name,a.mime_type as "mimeType",
+          case when a.mime_type like 'video/%' then 'video'
+               when a.mime_type like 'image/%' then 'imagem' else 'arquivo' end as format,
+          (select t.text from public.creative_transcripts t
+            where t.creative_version_id=c.current_version_id
+            order by t.created_at desc limit 1) as transcript
+     from public.creatives c
+     join public.creative_versions v on v.id=c.current_version_id
+     join public.creative_assets a on a.id=v.asset_id
+    where c.project_id=$1 and a.malware_status='clean' and a.available_at is not null
+    order by c.created_at desc limit 200`,[project.id])).rows;
+ const templates=(await db.pool.query<WizardTemplate>(
+  `select id::text,name,config from public.campaign_upload_templates
+    where project_id=$1 order by updated_at desc`,[project.id])).rows;
+ const products=(await db.pool.query<{name:string}>(
+  `select distinct name from public.commerce_products where project_id=$1
+    order by name limit 100`,[project.id])).rows.map(r=>r.name);
  return (
   <main className="app-layout">
    <DashboardSidebar activeHref="/dashboard/campanhas/subir" footerLabel="Subida de campanhas"/>
    <section className="app-content">
-    <DashboardTopbar returnTo="/dashboard/campanhas/subir" statusLabel="Em implantação" statusTone="attention"><span/></DashboardTopbar>
+    <DashboardTopbar returnTo="/dashboard/campanhas/subir" statusLabel="Modulo Campanhas" statusTone="default"><span/></DashboardTopbar>
     <div className="dashboard-main">
      <header className="dashboard-titlebar">
       <div><p className="eyebrow">Campanhas</p><h1>Subir campanhas</h1>
-      <p className="dashboard-context">O assistente de subida está em implantação (módulo Campanhas, decisões D-169 a D-173). As etapas serão estas:</p></div>
+      <p className="dashboard-context">Monte a subida em 5 etapas, revise tudo e envie pausada ou ativa. Rascunhos ficam salvos sem ir para a Meta.</p></div>
      </header>
-     <section className="dashboard-card">
-      <ol>
-       {steps.map(step=><li key={step.title}><strong>{step.title}</strong><p>{step.text}</p></li>)}
-      </ol>
-     </section>
+     <UploadWizard accounts={accounts} creatives={creativeRows} templates={templates} products={products}/>
     </div>
    </section>
   </main>
