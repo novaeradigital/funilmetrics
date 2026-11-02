@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { spawn } from "node:child_process";
 import type pg from "pg";
-import { loadProjectOpenAIConfig, loadProjectR2Config } from "./integration-credentials.js";
+import { loadProjectGroqConfig, loadProjectOpenAIConfig, loadProjectR2Config } from "./integration-credentials.js";
 import { R2CreativeStorage } from "./r2-storage.js";
 import { assertAiBudgetAvailable, loadAiPricing, transcriptionCostBrl } from "./ai-budget.js";
 
@@ -112,7 +112,7 @@ async function claim(pool: pg.Pool, maxAttempts: number) {
   }
 }
 
-async function transcribe(apiKey: string, model: string, audioPath: string) {
+async function transcribe(apiKey: string, model: string, audioPath: string, endpoint: string) {
   const form = new FormData();
   const bytes = await readFile(audioPath);
   form.append("file", new Blob([bytes], { type: "audio/mpeg" }), "audio.mp3");
@@ -121,13 +121,13 @@ async function transcribe(apiKey: string, model: string, audioPath: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10 * 60_000);
   try {
-    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`openai_http_${response.status}`);
+    if (!response.ok) throw new Error(`transcription_http_${response.status}`);
     const payload = (await response.json()) as {
       text?: string;
       language?: string;
@@ -167,18 +167,48 @@ export async function processCreativeTranscription(
     stage = "audio_extraction";
     await runFfmpeg(source, audio);
     const audioInfo = await stat(audio);
-    if (audioInfo.size <= 0 || audioInfo.size > 24 * 1024 * 1024) {
-      throw new Error("openai_http_413");
-    }
+    if (audioInfo.size <= 0) throw new Error("transcription_empty");
     const audioSeconds=await audioDurationSeconds(audio);
-    stage = "openai";
-    const transcript = await transcribe(
-      openai.apiKey,
-      openai.transcriptionModel,
-      audio,
-    );
+    // D-172: provedor de transcricao configuravel (Groq ou OpenAI), com
+    // reserva automatica pelo outro provedor quando ele esta configurado.
+    const groqConfig = await loadProjectGroqConfig(pool, job.project_id);
+    type TxAttempt = {
+      provider: "groq" | "openai"; apiKey: string; model: string;
+      endpoint: string; maxBytes: number;
+    };
+    const openaiAttempt: TxAttempt = {
+      provider: "openai", apiKey: openai.apiKey, model: openai.transcriptionModel,
+      endpoint: "https://api.openai.com/v1/audio/transcriptions",
+      maxBytes: 24 * 1024 * 1024,
+    };
+    const groqAttempt: TxAttempt | null = groqConfig ? {
+      provider: "groq", apiKey: groqConfig.apiKey, model: groqConfig.transcriptionModel,
+      endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
+      maxBytes: 100 * 1024 * 1024,
+    } : null;
+    const attempts: TxAttempt[] = openai.transcriptionProvider === "groq" && groqAttempt
+      ? [groqAttempt, openaiAttempt]
+      : groqAttempt ? [openaiAttempt, groqAttempt] : [openaiAttempt];
+    let transcript: Awaited<ReturnType<typeof transcribe>> | null = null;
+    let usedModel = openai.transcriptionModel;
+    let lastError: unknown = null;
+    for (const attempt of attempts) {
+      if (audioInfo.size > attempt.maxBytes) {
+        lastError = new Error("transcription_http_413");
+        continue;
+      }
+      stage = attempt.provider;
+      try {
+        transcript = await transcribe(attempt.apiKey, attempt.model, audio, attempt.endpoint);
+        usedModel = attempt.model;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!transcript) throw lastError ?? new Error("transcription_failed");
     const pricing=await loadAiPricing(pool,job.project_id,
-      openai.transcriptionModel,"creative_transcription");
+      usedModel,"creative_transcription");
     const estimatedCost=pricing
       ? transcriptionCostBrl(audioSeconds,Number(pricing.audio_cost_per_minute_brl??0))
       : null;
@@ -198,7 +228,7 @@ export async function processCreativeTranscription(
           job.creative_id,
           job.creative_version_id,
           job.id,
-          openai.transcriptionModel,
+          usedModel,
           transcript.language ?? null,
           transcript.text!.trim(),
           transcript.segments ? JSON.stringify(transcript.segments) : null,
@@ -210,7 +240,7 @@ export async function processCreativeTranscription(
            estimated_cost_brl,pricing_version
          ) values ($1,$2,$3,$4,'creative_transcription',$5,$6,$7)
          on conflict(job_id,operation) do nothing`,
-        [job.organization_id,job.project_id,job.id,openai.transcriptionModel,
+        [job.organization_id,job.project_id,job.id,usedModel,
          audioSeconds,estimatedCost,pricing?.id??null],
       );
       await client.query(
@@ -218,7 +248,7 @@ export async function processCreativeTranscription(
             set status = 'completed', model = $2, error_code = null,
                 finished_at = now(), updated_at = now()
           where id = $1`,
-        [job.id, openai.transcriptionModel],
+        [job.id, usedModel],
       );
       await client.query(
         `insert into public.audit_logs (
@@ -235,7 +265,7 @@ export async function processCreativeTranscription(
           job.project_id,
           job.creative_version_id,
           job.id,
-          openai.transcriptionModel,
+          usedModel,
         ],
       );
       await client.query("commit");

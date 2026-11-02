@@ -45,7 +45,7 @@ export function decryptCredentialBundle(
 async function storedIntegration(
   pool: pg.Pool,
   projectId: string,
-  provider: "cloudflare_r2" | "clamav" | "google_drive_app" | "openai",
+  provider: "cloudflare_r2" | "clamav" | "google_drive_app" | "openai" | "anthropic" | "groq",
 ) {
   const result = await pool.query<StoredIntegration>(
     `select connection.provider, connection.configuration,
@@ -75,6 +75,8 @@ export type OpenAIProjectConfig = {
   analysisModel: string;
   transcriptionModel: string;
   monthlyBudgetBrl: number;
+  analysisProvider: "openai" | "anthropic";
+  transcriptionProvider: "openai" | "groq";
 };
 
 export async function loadProjectOpenAIConfig(
@@ -102,7 +104,64 @@ export async function loadProjectOpenAIConfig(
   ) {
     throw new Error("openai_configuration_incomplete");
   }
-  return { apiKey, analysisModel, transcriptionModel, monthlyBudgetBrl };
+  const analysisProvider =
+    String(stored.configuration.analysisProvider ?? "openai").trim() === "anthropic"
+      ? "anthropic" as const
+      : "openai" as const;
+  const transcriptionProvider =
+    String(stored.configuration.transcriptionProvider ?? "openai").trim() === "groq"
+      ? "groq" as const
+      : "openai" as const;
+  return {
+    apiKey, analysisModel, transcriptionModel, monthlyBudgetBrl,
+    analysisProvider, transcriptionProvider,
+  };
+}
+
+export type GroqProjectConfig = {
+  apiKey: string;
+  transcriptionModel: string;
+};
+
+export async function loadProjectGroqConfig(
+  pool: pg.Pool,
+  projectId: string,
+): Promise<GroqProjectConfig | null> {
+  const stored = await storedIntegration(pool, projectId, "groq");
+  if (!stored) return null;
+  const key = vaultKey();
+  if (!key) throw new Error("integration_vault_disabled");
+  const secret = decryptCredentialBundle(stored, key);
+  const apiKey = String(secret.apiKey ?? "").trim();
+  const transcriptionModel = String(
+    stored.configuration.transcriptionModel ?? "",
+  ).trim();
+  if (!apiKey || !transcriptionModel) {
+    throw new Error("groq_configuration_incomplete");
+  }
+  return { apiKey, transcriptionModel };
+}
+
+export type AnthropicProjectConfig = {
+  apiKey: string;
+  analysisModel: string;
+};
+
+export async function loadProjectAnthropicConfig(
+  pool: pg.Pool,
+  projectId: string,
+): Promise<AnthropicProjectConfig | null> {
+  const stored = await storedIntegration(pool, projectId, "anthropic");
+  if (!stored) return null;
+  const key = vaultKey();
+  if (!key) throw new Error("integration_vault_disabled");
+  const secret = decryptCredentialBundle(stored, key);
+  const apiKey = String(secret.apiKey ?? "").trim();
+  const analysisModel = String(stored.configuration.analysisModel ?? "").trim();
+  if (!apiKey || !analysisModel) {
+    throw new Error("anthropic_configuration_incomplete");
+  }
+  return { apiKey, analysisModel };
 }
 
 export type GoogleDriveAppConfig = {

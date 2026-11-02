@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { loadProjectOpenAIConfig } from "./integration-credentials.js";
+import { loadProjectAnthropicConfig, loadProjectOpenAIConfig, type AnthropicProjectConfig, type OpenAIProjectConfig } from "./integration-credentials.js";
 import { analysisCostBrl, assertAiBudgetAvailable, loadAiPricing } from "./ai-budget.js";
 
 type Job = {
@@ -61,6 +61,69 @@ type ResponsePayload = {
   usage?: {input_tokens?:number;output_tokens?:number;total_tokens?:number};
 };
 
+type AnalysisResult = {
+  analysis: Record<string, unknown>;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+};
+
+async function analyzeWithOpenAI(
+  config: OpenAIProjectConfig, systemText: string, userText: string,
+): Promise<AnalysisResult> {
+  const response=await fetch("https://api.openai.com/v1/responses",{
+    method:"POST",
+    headers:{Authorization:`Bearer ${config.apiKey}`,"Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:config.analysisModel,store:false,
+      reasoning:{effort:"low"},
+      input:[{role:"system",content:systemText},
+        {role:"user",content:userText}],
+      text:{format:{type:"json_schema",name:"creative_analysis",strict:true,schema}},
+    }),
+  });
+  if (!response.ok) throw new Error(`openai_http_${response.status}`);
+  const responsePayload=await response.json() as ResponsePayload;
+  return {
+    analysis: JSON.parse(outputText(responsePayload)),
+    inputTokens: responsePayload.usage?.input_tokens??null,
+    outputTokens: responsePayload.usage?.output_tokens??null,
+    totalTokens: responsePayload.usage?.total_tokens??null,
+  };
+}
+
+async function analyzeWithAnthropic(
+  config: AnthropicProjectConfig, systemText: string, userText: string,
+): Promise<AnalysisResult> {
+  const response=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"x-api-key":config.apiKey,"anthropic-version":"2023-06-01",
+      "Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:config.analysisModel,max_tokens:8192,
+      system:`${systemText}\nResponda somente com um JSON válido, sem markdown, seguindo exatamente este esquema: ${JSON.stringify(schema)}`,
+      messages:[{role:"user",content:userText}],
+    }),
+  });
+  if (!response.ok) throw new Error(`anthropic_http_${response.status}`);
+  const payload=await response.json() as {
+    content?:Array<{type?:unknown;text?:unknown}>;
+    usage?:{input_tokens?:number;output_tokens?:number};
+  };
+  const text=(payload.content??[]).find((item)=>item.type==="text" &&
+    typeof item.text==="string")?.text;
+  if (typeof text!=="string" || !text.trim()) throw new Error("analysis_output_missing");
+  const cleaned=text.trim().replace(/^```(?:json)?/i,"").replace(/```$/,"").trim();
+  const inputTokens=payload.usage?.input_tokens??null;
+  const outputTokens=payload.usage?.output_tokens??null;
+  return {
+    analysis: JSON.parse(cleaned),
+    inputTokens, outputTokens,
+    totalTokens: inputTokens!==null && outputTokens!==null
+      ? inputTokens+outputTokens : null,
+  };
+}
+
 function outputText(payload: ResponsePayload) {
   if (typeof payload.output_text==="string") return payload.output_text;
   for (const item of payload.output??[]) for (const content of item.content??[])
@@ -98,23 +161,41 @@ export async function processCreativeAnalysis(pool:pg.Pool,maxAttempts=5) {
     const performanceContext=performance.length
       ? `\n\nMétricas observadas dos anúncios explicitamente ligados a esta versão (não demonstram causalidade):\n${JSON.stringify(performance)}`
       : "\n\nNão há métricas Meta ligadas a esta versão. Não formule hipóteses de desempenho.";
-    const response=await fetch("https://api.openai.com/v1/responses",{
-      method:"POST",
-      headers:{Authorization:`Bearer ${config.apiKey}`,"Content-Type":"application/json"},
-      body:JSON.stringify({
-        model:config.analysisModel,store:false,
-        reasoning:{effort:"low"},
-        input:[{role:"system",content:"Analise somente evidências presentes na transcrição e, quando fornecidas, métricas observadas. Não invente contexto ou resultados. Trate relações entre conteúdo e desempenho apenas como hipóteses, nunca como causalidade. Seja conciso e escreva em português do Brasil."},
-          {role:"user",content:`Transcrição do criativo:\n${job.transcript.slice(0,100000)}${performanceContext}`}],
-        text:{format:{type:"json_schema",name:"creative_analysis",strict:true,schema}},
-      }),
-    });
-    if (!response.ok) throw new Error(`openai_http_${response.status}`);
-    const responsePayload=await response.json() as ResponsePayload;
-    const analysis=JSON.parse(outputText(responsePayload));
-    const pricing=await loadAiPricing(pool,job.project_id,config.analysisModel,"creative_analysis");
-    const inputTokens=responsePayload.usage?.input_tokens??null;
-    const outputTokens=responsePayload.usage?.output_tokens??null;
+    const systemText="Analise somente evidências presentes na transcrição e, quando fornecidas, métricas observadas. Não invente contexto ou resultados. Trate relações entre conteúdo e desempenho apenas como hipóteses, nunca como causalidade. Seja conciso e escreva em português do Brasil.";
+    const userText=`Transcrição do criativo:\n${job.transcript.slice(0,100000)}${performanceContext}`;
+    // D-172: provedor de analise configuravel (OpenAI ou Claude), com
+    // reserva automatica pelo outro provedor quando ele esta configurado.
+    let result: AnalysisResult;
+    let usedModel = config.analysisModel;
+    if (config.analysisProvider==="anthropic") {
+      const anthropic=await loadProjectAnthropicConfig(pool,job.project_id);
+      if (!anthropic) throw new Error("anthropic_configuration_missing");
+      try {
+        result=await analyzeWithAnthropic(anthropic,systemText,userText);
+        usedModel=anthropic.analysisModel;
+      } catch {
+        result=await analyzeWithOpenAI(config,systemText,userText);
+        usedModel=config.analysisModel;
+      }
+    } else {
+      try {
+        result=await analyzeWithOpenAI(config,systemText,userText);
+      } catch (primaryError) {
+        const anthropic=await loadProjectAnthropicConfig(pool,job.project_id)
+          .catch(()=>null);
+        if (!anthropic) throw primaryError;
+        result=await analyzeWithAnthropic(anthropic,systemText,userText);
+        usedModel=anthropic.analysisModel;
+      }
+    }
+    const analysis=result.analysis as {
+      hook:string|null;promise:string|null;mechanism:string|null;cta:string|null;
+      proof:string[];objections:string[];structure:string[];
+      performance_hypotheses:string[];evidence:string[];confidence:number;tags:string[];
+    };
+    const pricing=await loadAiPricing(pool,job.project_id,usedModel,"creative_analysis");
+    const inputTokens=result.inputTokens;
+    const outputTokens=result.outputTokens;
     const estimatedCost=pricing && inputTokens!==null && outputTokens!==null
       ? analysisCostBrl(inputTokens,outputTokens,
           Number(pricing.input_cost_per_million_brl??0),
@@ -132,7 +213,7 @@ export async function processCreativeAnalysis(pool:pg.Pool,maxAttempts=5) {
                   $14::jsonb,$15::jsonb,$16::jsonb,$17)
         on conflict (job_id) do nothing`,
         [job.organization_id,job.project_id,job.creative_id,job.creative_version_id,
-         job.id,config.analysisModel,job.prompt_version,analysis.hook,analysis.promise,
+         job.id,usedModel,job.prompt_version,analysis.hook,analysis.promise,
          analysis.mechanism,JSON.stringify(analysis.proof),JSON.stringify(analysis.objections),
          analysis.cta,JSON.stringify(analysis.structure),
          JSON.stringify(analysis.performance_hypotheses),JSON.stringify(analysis.evidence),
@@ -143,8 +224,8 @@ export async function processCreativeAnalysis(pool:pg.Pool,maxAttempts=5) {
          estimated_cost_brl,pricing_version)
          values($1,$2,$3,$4,'creative_analysis',$5,$6,$7,$8,$9)
          on conflict(job_id,operation) do nothing`,
-        [job.organization_id,job.project_id,job.id,config.analysisModel,
-         inputTokens,outputTokens,responsePayload.usage?.total_tokens??null,
+        [job.organization_id,job.project_id,job.id,usedModel,
+         inputTokens,outputTokens,result.totalTokens,
          estimatedCost,pricing?.id??null],
       );
       for (const display of [...new Set<string>(analysis.tags)].slice(0,12)) {
@@ -165,14 +246,14 @@ export async function processCreativeAnalysis(pool:pg.Pool,maxAttempts=5) {
       }
       await client.query(`update public.creative_ai_jobs set status='completed',
         model=$2,finished_at=now(),updated_at=now() where id=$1`,
-        [job.id,config.analysisModel]);
+        [job.id,usedModel]);
       await client.query(`insert into public.audit_logs
         (organization_id,project_id,actor_user_id,action,target_type,target_id,after)
         select $1,$2,requested_by_user_id,'creative_analysis_completed',
         'creative_version',$3,
         jsonb_build_object('jobId',$4::text,'model',$5::text)
         from public.creative_ai_jobs where id=$4::uuid`,
-        [job.organization_id,job.project_id,job.creative_version_id,job.id,config.analysisModel]);
+        [job.organization_id,job.project_id,job.creative_version_id,job.id,usedModel]);
       await client.query("commit");
     } catch(error) { await client.query("rollback"); throw error; }
     finally { client.release(); }
