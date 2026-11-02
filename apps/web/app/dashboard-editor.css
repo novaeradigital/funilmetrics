@@ -170,3 +170,7 @@
 }
 .v2-fs-short{display:none}
 @media(max-width:760px){.v2-fs-full{display:none}.v2-fs-short{display:inline}}
+.v2-funnel-steps{height:calc(100% - 24px)}
+.v2-funnel-steps-grid{flex:1;min-height:0}
+.v2-funnel-bar{flex:1;height:auto;min-height:34px}
+@media(max-width:760px){.v2-funnel-bar{min-height:22px}}
