@@ -2408,3 +2408,59 @@ Regras:
 - Taxa de passagem da etapa = valor da etapa dividido pelo valor da etapa anterior; primeira etapa = 100%. Etapa com metrica indisponivel mostra indisponivel e nao gera taxa (regra da casa, D-136).
 - Os eventos disponiveis seguem as metricas governadas de sempre; nada muda na coleta nem nos calculos das metricas.
 - O formato vale por widget e fica salvo no layout (campo format, valores classic ou steps).
+
+## D-169: Modulo Campanhas (menu e escopo do MVP)
+
+Contexto: Fabio quer subir campanhas na Meta sem entrar no Gerenciador de Anuncios, inspirado no DirectAds, a partir de um desenho fechado com ele em 2026-11-02 (documento desenho-modulo-campanhas.md no goal do Muse). Muito ja existia: o Gerenciador de anuncios (leitura e acoes com aprovacao), a Biblioteca de criativos (Drive, R2 com antivirus) e o cano de transcricao e analise de criativos do worker.
+
+Decisao: nasce o menu Campanhas, logo abaixo de Visao geral, com tres itens: Gerenciador de anuncios (movido do grupo Performance; a pagina de leitura Campanhas de Performance vira uma visao dentro dele), Subir campanhas (assistente novo) e Publicacoes (fila e historico das subidas). A Biblioteca fica no grupo Criativos; a etapa de criativos do assistente abre a Biblioteca dentro do proprio fluxo.
+
+Regras:
+
+- MVP ja nasce multi-conta: uma subida pode mirar varias contas de anuncio, com Pagina, pixel e evento mapeados por conta; falha em uma conta nao derruba as outras e a tela de Publicacoes permite retentar so a que falhou.
+- Publicacao direta por quem montou a subida, sem aprovacao interna de segundo usuario. A trava e a tela de revisao completa antes do envio.
+- Nao entram no MVP: Smart Approval, Anti-Clone, Anti-Spy e Auto Re-approval (contorno de revisao da Meta, risco de ban desproporcional ao ganho).
+
+## D-170: Subir campanhas (assistente, estruturas e modos de envio)
+
+Decisao: assistente em 5 etapas. 1) Destino: contas, Pagina e Instagram por conta. 2) Criativos: tres fontes unificadas (Biblioteca, upload manual e link de pasta do Drive), tudo virando criativo da Biblioteca pelo mesmo cano (quarentena no R2, antivirus, hash anti duplicidade). 3) Estrutura. 4) Conjunto de anuncios com Modelos de subida salvos. 5) Copys, revisao e publicacao.
+
+Regras:
+
+- Estruturas: presets 1-3-1 e 1-1-1 (campanhas, conjuntos por campanha, anuncios por conjunto) mais construtor personalizavel: numeros livres de campanhas, conjuntos e anuncios, duplicacao da estrutura inteira N vezes e modo de distribuicao dos criativos (um por anuncio em rodizio, um por anuncio na ordem ou todos em cada conjunto). A matriz final da subida (quantidades por conta) aparece antes de avancar.
+- Revisao obrigatoria: a ultima etapa mostra tudo que vai nascer (nomes finais, criativo, copy, orcamento, publico, Pagina e slots livres, pixel e evento, URL final com UTMs) com avisos do pre-voo, e so no fim dela existe o botao Enviar para o Facebook.
+- Modos de envio: padrao rascunho. Salvar rascunho guarda a subida no Funil sem enviar nada. Enviar pausada cria tudo na Meta ja pausado. Enviar ativa cria veiculando, sujeita a revisao normal da Meta.
+
+## D-171: Nomenclatura automatica e UTMs
+
+Decisao: motor de nomenclatura por blocos, separado para campanha, conjunto e anuncio, com separador e caixa (maiusculas, minusculas, original) configuraveis e previa ao vivo com os criativos reais da subida, com validacao de nomes duplicados antes de publicar.
+
+Regras:
+
+- Variaveis: {criativo}, {pasta}, {produto}, {data} (data da subida, formato configuravel), {sequencia} (001, 002), {formato} (video, imagem, carrossel), {conta}, {pagina}, {pais}, {objetivo}, {publico}, {orcamento} e texto livre. Cada variavel tem fonte escolhivel: fixa na subida, do criativo, da configuracao (produto, pais, publico) ou de arquivo (um arquivo da Biblioteca indicado como referencia, de onde sai um valor por linha-chave).
+- O nome do anuncio carrega {criativo} por padrao: e o elo entre a venda atribuida e o criativo, alimentando Melhores anuncios.
+- Campo de UTMs no Modelo de subida e na etapa do conjunto: utm_source, utm_medium, utm_campaign, utm_content e utm_term mais parametros personalizados, aceitando as mesmas variaveis da nomenclatura resolvidas na publicacao. Na Meta, os parametros vao no campo de tags de URL do anuncio.
+
+## D-172: IA do modulo Campanhas (transcricao e analise configuraveis)
+
+Contexto: hoje o worker transcreve video pela OpenAI (gpt-4o-transcribe) e analisa o criativo tambem pela OpenAI. Fabio pediu a transcricao pela Groq e um campo para escolher qual ferramenta faz a analise, OpenAI ou Claude (Anthropic). Nao existe integracao Anthropic no sistema hoje.
+
+Decisao: configuracao de IA por projeto, no padrao das integracoes (credencial no cofre). Nasce o cartao Anthropic (Claude) em Integracoes. Dois seletores independentes: ferramenta de transcricao (Groq ou OpenAI; padrao Groq, modelo whisper-large-v3-turbo, com large-v3 como opcao de qualidade) e ferramenta de analise e copy (OpenAI ou Claude), cada um com seu campo de modelo e sua tabela de preco no orcamento de IA. Reserva automatica opcional: se o provedor escolhido falhar, o job tenta pelo outro e a tela de Publicacoes mostra qual provedor executou cada etapa.
+
+Regras:
+
+- A analise pede o mesmo resultado estruturado atual (gancho, promessa, mecanismo, prova, objecoes, CTA) para qualquer provedor, cada um com seu adaptador no worker.
+- Copy: a IA gera 3 modelos (texto principal, titulo e botao) a partir da transcricao, da analise e dos dados do produto. Padrao: 3 modelos para a subida inteira. Modo por criativo disponivel (3 por criativo, com estimativa de custo exibida antes de gerar) e botao de variacao individual por criativo sobre o modo geral. Nada sobe sem aprovacao humana da copy.
+- A Anthropic nao tem API de transcricao de audio: por isso a escolha OpenAI ou Claude existe so na analise e na copy, nunca na transcricao.
+
+## D-173: Publicacao na Meta (permissao, fila e slots da Pagina)
+
+Contexto: criar campanha exige o escopo ads_management, que o fluxo de conexao atual nao pede (so ads_read e business_management). Segundo o Fabio, o app dele ja tem todas as permissoes necessarias liberadas na Meta.
+
+Decisao: o fluxo de conexao Meta passa a solicitar tambem ads_management e os perfis sao reconectados uma vez para o token valer com escrita. A publicacao roda na fila do worker (upload de video na Meta e assincrono), com idempotencia: retentar uma publicacao nao duplica campanha, conjunto ou anuncio.
+
+Regras:
+
+- O limite de anuncios ativos por Pagina vem da API da Meta (volume de anuncios da Pagina: 250 na faixa inicial de gasto, depois 1.000, 5.000 e 20.000) e aparece no Gerenciador, no pre-voo da subida e na revisao, sempre com o valor que a API devolver.
+- A tela de Publicacoes guarda cada subida com status por campanha, conjunto e anuncio, erro legivel e retentativa seletiva do que falhou.
+- Ordem das levas: 1) fundacao (menu, escopo, configuracao de IA, modelos de dados); 2) assistente de subida com revisao; 3) publicacao no worker e tela de Publicacoes.
