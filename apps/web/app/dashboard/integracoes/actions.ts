@@ -21,6 +21,8 @@ import {validateCloudflareToken} from "../../../lib/cloudflare-api";
 
 const supported = new Set([
   "openai",
+  "anthropic",
+  "groq",
   "cloudflare_r2",
   "clamav",
   "google_drive_app",
@@ -123,6 +125,26 @@ export async function saveIntegrationConfiguration(formData: FormData) {
     configuration.analysisModel = analysisModel;
     configuration.transcriptionModel = transcriptionModel;
     configuration.monthlyBudgetBrl = monthlyBudget;
+    const analysisProvider = field(formData, "analysis_provider", 20);
+    const transcriptionProvider = field(formData, "transcription_provider", 20);
+    configuration.analysisProvider = analysisProvider === "anthropic" ? "anthropic" : "openai";
+    configuration.transcriptionProvider = transcriptionProvider === "groq" ? "groq" : "openai";
+  } else if (provider === "anthropic") {
+    const apiKey = field(formData, "api_key", 500);
+    const analysisModel = field(formData, "analysis_model", 120);
+    if (!apiKey.startsWith("sk-ant-") || !analysisModel) {
+      redirect("/dashboard/integracoes?status=invalid");
+    }
+    secrets.apiKey = apiKey;
+    configuration.analysisModel = analysisModel;
+  } else if (provider === "groq") {
+    const apiKey = field(formData, "api_key", 500);
+    const transcriptionModel = field(formData, "transcription_model", 120);
+    if (!apiKey.startsWith("gsk_") || !transcriptionModel) {
+      redirect("/dashboard/integracoes?status=invalid");
+    }
+    secrets.apiKey = apiKey;
+    configuration.transcriptionModel = transcriptionModel;
   } else if (provider === "cloudflare_r2") {
     const accountId = field(formData, "account_id", 200);
     const bucket = field(formData, "bucket", 200);
@@ -231,6 +253,10 @@ export async function saveIntegrationConfiguration(formData: FormData) {
                 ? "Meta Ads · usuário do sistema"
               : provider === "openai"
                 ? "OpenAI"
+              : provider === "anthropic"
+                ? "Anthropic (Claude)"
+              : provider === "groq"
+                ? "Groq"
                 : provider === "cloudflare_r2"
                   ? "Cloudflare R2"
                   : provider === "railway"
