@@ -214,7 +214,7 @@ export function IntegrationForm({ provider, title, projectId, current, disabled 
         <label>App ID<input defaultValue={String(config.appId ?? "")} disabled={disabled} name="app_id" inputMode="numeric" /></label>
         <label>App Secret<input disabled={disabled} name="app_secret" placeholder={current?.has_secret ? "•••••••••••• (substituir)" : "Segredo do app Meta"} type="password" /></label>
         <small>Redirect URI: https://app.funilmetrics.site/dashboard/integracoes/meta/callback</small>
-        <small>Escopos de leitura: ads_read e business_management.</small>
+        <small>Escopos: ads_read, business_management e ads_management (gestao, necessario para subir campanhas pelo Funil).</small>
         {current?.has_secret ? <Link className="secondary-button" href={`/dashboard/integracoes/meta/connect?projectId=${projectId}`}>Conectar conta via OAuth</Link> : null}
       </> : provider === "meta_ads" ? <>
         <label>Token de acesso do sistema<input disabled={disabled} name="access_token" placeholder={current?.has_secret ? "•••••••••••• (substituir)" : "Token da Meta"} type="password" /></label>

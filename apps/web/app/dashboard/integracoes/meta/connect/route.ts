@@ -39,6 +39,6 @@ export async function GET(request:NextRequest){
      createHash("sha256").update(state).digest("hex")]);
   const url=new URL("https://www.facebook.com/v25.0/dialog/oauth");
   url.search=new URLSearchParams({client_id:config.appId,redirect_uri:metaOAuthRedirectUri,
-    state,scope:"ads_read,business_management",response_type:"code"}).toString();
+    state,scope:"ads_read,business_management,ads_management",response_type:"code"}).toString();
   return NextResponse.redirect(url);
 }
