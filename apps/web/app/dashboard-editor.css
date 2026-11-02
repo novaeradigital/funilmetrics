@@ -168,3 +168,5 @@
  .v2-funnel-drop{font-size:10px}
  .v2-funnel-steps-head strong{font-size:22px}
 }
+.v2-fs-short{display:none}
+@media(max-width:760px){.v2-fs-full{display:none}.v2-fs-short{display:inline}}
