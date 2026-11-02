@@ -11,9 +11,12 @@ const navigationGroups=[
  {key:"overview",label:"Visão geral",icon:"overview",items:[
   {href:"/dashboard-v2",label:"Dashboard"},
   {href:"/dashboard/melhores-anuncios",label:"Melhores anúncios"}]},
- {key:"performance",label:"Performance",icon:"campaigns",items:[
+ {key:"campaigns",label:"Campanhas",icon:"campaigns",items:[
   {href:"/dashboard/gerenciador-anuncios",label:"Gerenciador de anúncios"},
-  {href:"/dashboard/campanhas",label:"Campanhas"},{href:"/dashboard/vendas",label:"Vendas"},
+  {href:"/dashboard/campanhas/subir",label:"Subir campanhas"},
+  {href:"/dashboard/campanhas/publicacoes",label:"Publicações"}]},
+ {key:"performance",label:"Performance",icon:"campaigns",items:[
+  {href:"/dashboard/vendas",label:"Vendas"},
   {href:"/dashboard/produtos",label:"Produtos"},{href:"/dashboard/atribuicao",label:"Atribuição"},
   {href:"/dashboard/clientes",label:"Clientes"},{href:"/dashboard/ltv",label:"LTV e coortes"},
   {href:"/dashboard/persona",label:"Persona"},{href:"/dashboard/segmentos",label:"Segmentos"},
