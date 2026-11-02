@@ -73,6 +73,11 @@ pagamento, segmento de comprador) recortam as vendas, mas nao
 escondem o gasto: ele continua visivel para comparacao no mesmo
 periodo, sempre rotulado como gasto das contas selecionadas.
 
+## Funil de conversao (formatos do widget)
+
+- Formato Classico: barras empilhadas com o valor de cada etapa e a taxa em relacao a etapa anterior.
+- Formato Etapas: conversao geral (ultima etapa dividida pela primeira) e, por etapa, taxa de passagem (etapa dividida pela anterior; a primeira vale 100%), quantidade e barra proporcional a primeira etapa, com a perda da etapa indicada.
+- As etapas e a ordem vem da configuracao do widget (metricas governadas, na ordem salva). Metrica indisponivel nao gera taxa.
 ## Lucro por conta (widget do Dashboard)
 
 - Investimento da conta: soma de spend_base no periodo, mesma base do widget Investimento por conta, respeitando o filtro de contas.

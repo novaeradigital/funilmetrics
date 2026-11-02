@@ -142,3 +142,19 @@
  .v2-donut{align-items:stretch}
  .v2-donut-chart{flex:none;width:100%;height:200px}
 }
+.v2-funnel-steps{display:flex;flex-direction:column;gap:12px;padding:6px 2px}
+.v2-funnel-steps-head{align-items:baseline;display:flex;gap:10px}
+.v2-funnel-steps-head span{color:#8e8e93;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.v2-funnel-steps-head strong{font-size:26px;font-weight:800}
+.v2-funnel-steps-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.v2-funnel-stage{display:flex;flex-direction:column;gap:6px;min-width:0}
+.v2-funnel-stage-label{color:#a1a1aa;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v2-funnel-stage-value{align-items:baseline;display:flex;gap:6px}
+.v2-funnel-stage-value strong{font-size:17px}
+.v2-funnel-stage-value span{color:#8e8e93;font-size:12.5px}
+.v2-funnel-bar{background:#1b1b1f;border-radius:6px;height:34px;overflow:hidden}
+.v2-funnel-fill{background:linear-gradient(90deg,#1f9d66,#24d689);clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);height:100%}
+.v2-funnel-drop{color:#fb4d6d;font-size:11.5px}
+.v2-stage-order{display:grid;gap:6px;list-style:none;margin:4px 0 0;padding:0}
+.v2-stage-order li{align-items:center;background:#151518;border:1px solid #26262b;border-radius:8px;display:flex;font-size:12.5px;gap:8px;justify-content:space-between;padding:6px 8px}
+.v2-stage-order button{padding:2px 8px}

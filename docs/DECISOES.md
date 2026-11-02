@@ -2396,3 +2396,15 @@ Regras:
 - Lucro = faturamento atribuido menos investimento (lucro de midia; nao desconta taxas do gateway nem custo de produto). ROAS = faturamento dividido pelo investimento; sem investimento no periodo, ROAS indisponivel.
 - Venda sem anuncio identificado nao entra em nenhuma conta: a soma das contas pode ser menor que o faturamento total do painel. Prova na criacao (outubro/2026, 1 a 30): 17 vendas e R$ 5.052,91 atribuidos (Saoliveira 02 com lucro de R$ 307,35 e Saoliveira 01 com R$ 3.824,04 atribuidos) e 3 vendas (R$ 184,00) sem atribuicao, fechando nas 20 vendas e R$ 5.236,91 do periodo.
 - Estado vazio: "Sem dados no periodo."
+
+## D-168: Formato Etapas no widget Funil de conversao
+
+Contexto: Fabio quer um funil de conversao no estilo das ferramentas de mercado (conversao geral no topo e etapas em colunas com a taxa de passagem), aproveitando o widget de funil existente em vez de criar outro.
+
+Decisao: o kind conversion_funnel ganha a opcao Formato na engrenagem: Classico (barras atuais) ou Etapas (novo). No formato Etapas: conversao geral no topo (ultima etapa dividida pela primeira), cada etapa em coluna com nome, taxa de passagem em destaque, quantidade, barra proporcional a primeira etapa (verde do painel, borda inclinada) e a perda da etapa em vermelho. A ordem das etapas passa a ser editavel na engrenagem com setas de subir e descer sobre as etapas marcadas; o funil renderiza exatamente na ordem salva em config.metrics.
+
+Regras:
+
+- Taxa de passagem da etapa = valor da etapa dividido pelo valor da etapa anterior; primeira etapa = 100%. Etapa com metrica indisponivel mostra indisponivel e nao gera taxa (regra da casa, D-136).
+- Os eventos disponiveis seguem as metricas governadas de sempre; nada muda na coleta nem nos calculos das metricas.
+- O formato vale por widget e fica salvo no layout (campo format, valores classic ou steps).
