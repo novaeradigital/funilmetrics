@@ -10,6 +10,7 @@ import { processGoogleDriveInventory } from "./google-drive-inventory.js";
 import { processGoogleDriveImport } from "./google-drive-import.js";
 import { processCreativeTranscription } from "./creative-transcription.js";
 import { processCreativeAnalysis } from "./creative-analysis.js";
+import { processCampaignUploads } from "./campaign-publisher.js";
 import { scheduleGoogleDriveSync } from "./google-drive-sync-scheduler.js";
 import {processCreativeTextExtraction} from "./creative-text-extraction.js";
 import {scheduleMetaSync} from "./meta-sync-scheduler.js";
@@ -166,6 +167,12 @@ export async function runWorker(signal: AbortSignal) {
         const textExtraction=await processCreativeTextExtraction(database.pool,maxAttempts);
         if(textExtraction.claimed>0){
           process.stdout.write(`${JSON.stringify({event:"creative_text_extraction_processed",...textExtraction})}\n`);
+        }
+        const campaignUploads = await processCampaignUploads(database.pool);
+        if (campaignUploads.claimed > 0) {
+          process.stdout.write(
+            `${JSON.stringify({ event: "campaign_upload_processed", ...campaignUploads })}\n`,
+          );
         }
         const analysis = await processCreativeAnalysis(database.pool, maxAttempts);
         if (analysis.claimed > 0) {
