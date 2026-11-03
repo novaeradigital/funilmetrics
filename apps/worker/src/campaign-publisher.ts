@@ -171,6 +171,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
     const r2 = await loadProjectR2Config(pool, upload.project_id);
     const storage = r2 ? new R2CreativeStorage(r2) : null;
     const mediaCache = new Map<string, { videoId?: string; imageHash?: string }>();
+    const bidStrategyFixed = new Set<string>();
 
     const markFailed = async (item: ItemRow, code: string, message: string) => {
       item.status = "failed";
@@ -218,6 +219,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
             status: "PAUSED",
             special_ad_categories: [],
             is_adset_budget_sharing_enabled: false,
+            bid_strategy: "LOWEST_COST_WITHOUT_CAP",
           };
           if (adSetConfig.budgetLevel === "campaign") {
             fields.daily_budget = Math.round(Number(adSetConfig.dailyBudget ?? 0) * 100);
@@ -225,6 +227,17 @@ export async function processCampaignUploads(pool: pg.Pool) {
           const created = await graphPost(token, `${act}/campaigns`, fields);
           await markCreated(item, String(created.id));
         } else if (item.level === "adset") {
+          // Campanhas criadas antes da correcao da estrategia de lance
+          // nasceram com LOWEST_COST_WITH_BID_CAP, que exige bid_amount.
+          // Ajusta para a estrategia sem teto, uma vez por campanha.
+          if (parent?.external_id && !bidStrategyFixed.has(parent.id)) {
+            bidStrategyFixed.add(parent.id);
+            try {
+              await graphPost(token, parent.external_id, {
+                bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+              });
+            } catch { /* campanha ativa ou ja ajustada: segue a criacao */ }
+          }
           const payload = item.payload ?? {};
           const countries = String(payload.countries ?? "BR")
             .split(",").map((c) => c.trim()).filter(Boolean);
