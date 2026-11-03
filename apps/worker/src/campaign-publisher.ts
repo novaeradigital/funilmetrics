@@ -88,7 +88,7 @@ async function graphGet(
   path: string,
   params: Record<string, string>,
 ): Promise<Record<string, any>> {
-  const url = new URL(`${GRAPH_API}/${path}`);
+  const url = new URL(`${graphBase}/${path}`);
   url.searchParams.set("access_token", token);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   const response = await fetch(url, { method: "GET" });
