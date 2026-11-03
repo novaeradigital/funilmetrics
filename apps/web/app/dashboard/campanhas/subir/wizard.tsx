@@ -52,24 +52,47 @@ export function UploadWizard({accounts,creatives,templates,products}:{
   return {produto:productName||undefined,pais:adSet.countries||undefined,data:new Date(),
    conta:accountName,objetivo:adSet.objective,orcamento:adSet.dailyBudget,publico:undefined};
  }
+ type PreviewAd={name:string;creative:string;url:string};
+ type PreviewAdSet={name:string;ads:PreviewAd[]};
+ type PreviewCampaign={name:string;adSets:PreviewAdSet[]};
  const preview=useMemo(()=>{
-  if(!selectedAccounts.length||!selectedCreativeObjs.length)return {rows:[] as Array<Record<string,string>>,duplicates:0,totalAds:0};
+  const empty={campaigns:[] as PreviewCampaign[],duplicates:0,totalAds:0,totalAdSets:0,totalCampaigns:0,repeatedCreative:false};
+  if(!selectedAccounts.length||!selectedCreativeObjs.length)return empty;
   const account=accounts.find(a=>a.externalId===selectedAccounts[0]);
   const slots=expandStructure(structure,selectedCreativeObjs.length);
-  const rows=slots.slice(0,30).map(slot=>{
+  const campaignMap=new Map<number,PreviewCampaign>();
+  const adSetMap=new Map<string,PreviewAdSet>();
+  const adNames:string[]=[];
+  let repeatedCreative=false;
+  const seenInCampaign=new Map<number,Set<number>>();
+  for(const slot of slots){
    const creative=selectedCreativeObjs[slot.creativeIndex]!;
    const ctx={...baseContext(account?.name??""),criativo:creative.name,formato:creative.format,sequencia:slot.sequence};
-   const campaign=resolveNamingPattern(naming.campaignPattern,ctx,namingOpts);
-   const adset=resolveNamingPattern(naming.adSetPattern,ctx,namingOpts);
-   const ad=resolveNamingPattern(naming.adPattern,ctx,namingOpts);
+   const campaignName=resolveNamingPattern(naming.campaignPattern,ctx,namingOpts);
+   const adSetName=resolveNamingPattern(naming.adSetPattern,ctx,namingOpts);
+   const adName=resolveNamingPattern(naming.adPattern,ctx,namingOpts);
+   adNames.push(adName);
+   const seen=seenInCampaign.get(slot.campaignIndex)??new Set<number>();
+   if(seen.has(slot.creativeIndex)&&structure.distribution!=="all")repeatedCreative=true;
+   seen.add(slot.creativeIndex);seenInCampaign.set(slot.campaignIndex,seen);
+   let campaign=campaignMap.get(slot.campaignIndex);
+   if(!campaign){campaign={name:campaignName,adSets:[]};campaignMap.set(slot.campaignIndex,campaign);}
+   const adSetKey=`${slot.campaignIndex}:${slot.adSetIndex}`;
+   let adSetEntry=adSetMap.get(adSetKey);
+   if(!adSetEntry){adSetEntry={name:adSetName,ads:[]};adSetMap.set(adSetKey,adSetEntry);campaign.adSets.push(adSetEntry);}
    const utmQuery=buildUtmQuery({utm_source:utms.utm_source,utm_medium:utms.utm_medium,
-    utm_campaign:utms.utm_campaign.replaceAll("{campanha}",campaign),
-    utm_content:utms.utm_content.replaceAll("{anuncio}",ad),utm_term:utms.utm_term},ctx,namingOpts);
-   return {campaign,adset,ad,creative:creative.name,
-    url:utmQuery?`${adSet.destinationUrl}${adSet.destinationUrl.includes("?")?"&":"?"}${utmQuery}`:adSet.destinationUrl};
-  });
-  const names=new Set(rows.map(r=>r.ad));
-  return {rows,duplicates:rows.length-names.size,totalAds:slots.length*selectedAccounts.length};
+    utm_campaign:utms.utm_campaign.replaceAll("{campanha}",campaignName),
+    utm_content:utms.utm_content.replaceAll("{anuncio}",adName),utm_term:utms.utm_term},ctx,namingOpts);
+   adSetEntry.ads.push({name:adName,creative:creative.name,
+    url:utmQuery?`${adSet.destinationUrl}${adSet.destinationUrl.includes("?")?"&":"?"}${utmQuery}`:adSet.destinationUrl});
+  }
+  const campaigns=[...campaignMap.values()];
+  return {campaigns,
+   duplicates:adNames.length-new Set(adNames).size,
+   totalAds:slots.length*selectedAccounts.length,
+   totalAdSets:campaigns.reduce((n,c)=>n+c.adSets.length,0)*selectedAccounts.length,
+   totalCampaigns:campaigns.length*selectedAccounts.length,
+   repeatedCreative};
   // eslint-disable-next-line react-hooks/exhaustive-deps
  },[selectedAccounts,selectedCreativeObjs,structure,naming,utms,adSet,productName]);
 
@@ -183,7 +206,7 @@ export function UploadWizard({accounts,creatives,templates,products}:{
      <option value="rotate">Rodizio</option><option value="sequence">Na ordem</option><option value="all">Todos em cada conjunto</option>
     </select></label>
    </div>
-   <p>Matriz: {preview.totalAds} anuncio(s) no total, em {selectedAccounts.length} conta(s).</p>
+   <p>Matriz: {preview.totalCampaigns} campanha(s), {preview.totalAdSets} conjunto(s) e {preview.totalAds} anuncio(s) no total, em {selectedAccounts.length} conta(s).</p>
   </section>}
 
   {step===4&&<section className="dashboard-card">
@@ -248,14 +271,19 @@ export function UploadWizard({accounts,creatives,templates,products}:{
     : selectedCreativeObjs.map(c=>copyEditor(c.id,c.name))}
    {copyError&&<p role="alert">{copyError}</p>}
    <h2>Revisao</h2>
+   <p><strong>{preview.totalCampaigns} campanha(s), {preview.totalAdSets} conjunto(s) e {preview.totalAds} anuncio(s)</strong> em {selectedAccounts.length} conta(s). A arvore abaixo mostra a primeira conta; as demais repetem a mesma estrutura.</p>
+   {preview.repeatedCreative&&<p>Voce selecionou {selectedCreativeObjs.length} criativo(s), mas a estrutura pede mais anuncios por campanha: o mesmo criativo se repete em conjuntos diferentes. Numa 1-3-1, o comum e um criativo diferente por conjunto. Se a repeticao for intencional, tudo bem.</p>}
    {preview.duplicates>0&&<p role="alert">{preview.duplicates} nome(s) de anuncio duplicado(s) na previa. Ajuste a nomenclatura (por exemplo, com {"{sequencia}"}).</p>}
-   <table>
-    <thead><tr><th>Campanha</th><th>Conjunto</th><th>Anuncio</th><th>Criativo</th><th>URL final</th></tr></thead>
-    <tbody>{preview.rows.map((row,index)=><tr key={index}>
-     <td>{row.campaign}</td><td>{row.adset}</td><td>{row.ad}</td><td>{row.creative}</td><td>{row.url}</td>
-    </tr>)}</tbody>
-   </table>
-   {preview.totalAds>preview.rows.length&&<p>Previa com os primeiros {preview.rows.length} de {preview.totalAds} anuncios.</p>}
+   {preview.campaigns.map((campaign,campaignIndex)=><div key={campaignIndex} style={{border:"1px solid #ddd",borderRadius:8,padding:12,marginBottom:12}}>
+    <strong>Campanha: {campaign.name}</strong>
+    {campaign.adSets.map((adSetItem,adSetIndex)=><div key={adSetIndex} style={{marginLeft:16,marginTop:8}}>
+     <div>Conjunto: {adSetItem.name}</div>
+     {adSetItem.ads.map((ad,adIndex)=><div key={adIndex} style={{marginLeft:16,marginTop:4}}>
+      <div>Anuncio: {ad.name} - Criativo: {ad.creative}</div>
+      <div style={{wordBreak:"break-all"}}>{ad.url}</div>
+     </div>)}
+    </div>)}
+   </div>)}
    <form action={createUpload}>
     <input type="hidden" name="config" value={configJson}/>
     <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>

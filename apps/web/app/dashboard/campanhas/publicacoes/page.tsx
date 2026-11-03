@@ -24,7 +24,7 @@ export default async function PublicacoesPage({searchParams}:{searchParams:Promi
  const db=getDatabase();
  const uploads=(await db.pool.query<UploadRow>(
   `select u.id::text,u.status,u.send_mode,u.summary,u.error_message,
-          u.created_at::text,u.finished_at::text,coalesce(us.name,'') as created_by
+          u.created_at::text,u.finished_at::text,coalesce(us.display_name,us.email,'') as created_by
      from public.campaign_uploads u
      left join public.users us on us.id=u.created_by_user_id
     where u.project_id=$1 order by u.created_at desc limit 50`,[project.id])).rows;
