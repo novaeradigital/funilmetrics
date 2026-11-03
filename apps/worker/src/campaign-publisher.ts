@@ -83,6 +83,22 @@ function graphFailure(payload: Record<string, any>, httpStatus: number): GraphEr
   };
 }
 
+async function graphGet(
+  token: string,
+  path: string,
+  params: Record<string, string>,
+): Promise<Record<string, any>> {
+  const url = new URL(`${GRAPH_API}/${path}`);
+  url.searchParams.set("access_token", token);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  const response = await fetch(url, { method: "GET" });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, any>;
+  if (!response.ok || payload.error) {
+    throw graphFailure(payload, response.status);
+  }
+  return payload;
+}
+
 async function graphUpload(
   token: string, path: string, field: string, bytes: Buffer,
   mimeType: string, filename: string, extra: Record<string, string> = {},
@@ -170,7 +186,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
     }
     const r2 = await loadProjectR2Config(pool, upload.project_id);
     const storage = r2 ? new R2CreativeStorage(r2) : null;
-    const mediaCache = new Map<string, { videoId?: string; imageHash?: string }>();
+    const mediaCache = new Map<string, { videoId?: string; imageHash?: string; imageUrl?: string }>();
     const bidStrategyFixed = new Set<string>();
 
     const markFailed = async (item: ItemRow, code: string, message: string) => {
@@ -294,7 +310,21 @@ export async function processCampaignUploads(pool: pg.Pool) {
               if (bytes.length > 200 * 1024 * 1024) throw { code: "media_too_large", message: "Video acima de 200 MB." } as GraphError;
               const uploaded = await graphUpload(token, `${act}/advideos`, "source",
                 bytes, asset.mime_type, item.name, { title: item.name });
-              media = { videoId: String(uploaded.id) };
+              // A Meta exige miniatura no anuncio de video; ela e gerada
+              // de forma assincrona, entao espera ate aparecer.
+              let imageUrl = "";
+              for (let attempt = 0; attempt < 9 && !imageUrl; attempt += 1) {
+                const thumbs = await graphGet(token, `${uploaded.id}/thumbnails`,
+                  { fields: "uri,is_preferred" }).catch(() => null);
+                const list = (thumbs?.data ?? []) as Array<{ uri?: string; is_preferred?: boolean }>;
+                const pick = list.find((entry) => entry.is_preferred) ?? list[0];
+                if (pick?.uri) imageUrl = String(pick.uri);
+                else await new Promise((resolve) => setTimeout(resolve, 10000));
+              }
+              if (!imageUrl) {
+                throw { code: "video_thumbnail_pending", message: "Miniatura do video ainda nao foi gerada pela Meta; tente de novo em instantes." } as GraphError;
+              }
+              media = { videoId: String(uploaded.id), imageUrl };
             } else {
               const uploaded = await graphUpload(token, `${act}/adimages`, "filename",
                 bytes, asset.mime_type, item.name);
@@ -313,6 +343,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
           if (media.videoId) {
             storySpec.video_data = {
               video_id: media.videoId,
+              image_url: media.imageUrl,
               message: copy.primaryText,
               title: copy.headline,
               call_to_action: { type: ctaType(copy.cta), value: { link: destinationUrl } },
