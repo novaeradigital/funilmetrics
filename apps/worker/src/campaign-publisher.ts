@@ -64,14 +64,23 @@ async function graphPost(
   });
   const payload = (await response.json().catch(() => ({}))) as Record<string, any>;
   if (!response.ok || payload.error) {
-    const err = payload.error ?? {};
-    const failure: GraphError = {
-      code: `graph_${err.code ?? response.status}_${err.error_subcode ?? 0}`,
-      message: String(err.message ?? `http_${response.status}`).slice(0, 500),
-    };
-    throw failure;
+    throw graphFailure(payload, response.status);
   }
   return payload;
+}
+
+function graphFailure(payload: Record<string, any>, httpStatus: number): GraphError {
+  const err = payload.error ?? {};
+  const parts = [
+    String(err.message ?? `http_${httpStatus}`),
+    err.error_user_title ? String(err.error_user_title) : "",
+    err.error_user_msg ? String(err.error_user_msg) : "",
+    err.error_data ? JSON.stringify(err.error_data) : "",
+  ].filter(Boolean);
+  return {
+    code: `graph_${err.code ?? httpStatus}_${err.error_subcode ?? 0}`,
+    message: parts.join(" | ").slice(0, 900),
+  };
 }
 
 async function graphUpload(
@@ -88,12 +97,7 @@ async function graphUpload(
   });
   const payload = (await response.json().catch(() => ({}))) as Record<string, any>;
   if (!response.ok || payload.error) {
-    const err = payload.error ?? {};
-    const failure: GraphError = {
-      code: `graph_${err.code ?? response.status}_${err.error_subcode ?? 0}`,
-      message: String(err.message ?? `http_${response.status}`).slice(0, 500),
-    };
-    throw failure;
+    throw graphFailure(payload, response.status);
   }
   return payload;
 }
@@ -245,6 +249,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
             fields.daily_budget = Math.round(Number(payload.dailyBudget ?? 0) * 100);
           }
           if (payload.pixelId) {
+            fields.destination_type = "WEBSITE";
             fields.promoted_object = {
               pixel_id: String(payload.pixelId),
               custom_event_type: metaEventType(String(payload.event ?? "Purchase")),
