@@ -92,7 +92,7 @@ export async function saveIntegrationConfiguration(formData: FormData) {
     configuration.authorizationMode = "oauth_app";
     configuration.redirectUri =
       "https://app.funilmetrics.site/dashboard/integracoes/meta/callback";
-    configuration.scopes = "ads_read,business_management,ads_management";
+    configuration.scopes = "ads_read,business_management,ads_management,pages_show_list,pages_read_engagement,pages_manage_ads";
   } else if (provider === "meta_ads") {
     const accessToken = field(formData, "access_token", 1000);
     const appSecret = field(formData, "app_secret", 500);
@@ -669,7 +669,7 @@ export async function validateIntegrationConnection(formData: FormData) {
       await database.pool.query(
         `update public.meta_authorizations set
            external_subject_id=$2,external_subject_name=$3,
-           granted_scopes=array['ads_read','business_management','ads_management'],
+           granted_scopes=array['ads_read','business_management','ads_management','pages_show_list','pages_read_engagement','pages_manage_ads'],
            status='active',last_validated_at=now(),updated_at=now()
          where connection_id=$1`,
         [authorized.connection_id,String(profile.id??""),

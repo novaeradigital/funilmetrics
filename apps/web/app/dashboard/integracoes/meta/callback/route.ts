@@ -110,7 +110,7 @@ export async function GET(request:NextRequest){
          encrypted.ciphertext,encrypted.initializationVector,encrypted.authenticationTag]);
       const updated=await client.query(
         `update public.meta_authorizations
-            set external_subject_name=$2,granted_scopes=array['ads_read','business_management','ads_management'],
+            set external_subject_name=$2,granted_scopes=array['ads_read','business_management','ads_management','pages_show_list','pages_read_engagement','pages_manage_ads'],
                 token_expires_at=case when $3::int>0 then now()+($3::text||' seconds')::interval else null end,
                 status='active',revoked_at=null,last_validated_at=now(),updated_at=now()
           where connection_id=$1`,
@@ -119,7 +119,7 @@ export async function GET(request:NextRequest){
         await client.query(
           `insert into public.meta_authorizations(organization_id,project_id,connection_id,mode,
            external_subject_id,external_subject_name,granted_scopes,token_expires_at,status,last_validated_at)
-           values($1,$2,$3,'oauth_user',$4,$5,array['ads_read','business_management','ads_management'],
+           values($1,$2,$3,'oauth_user',$4,$5,array['ads_read','business_management','ads_management','pages_show_list','pages_read_engagement','pages_manage_ads'],
            case when $6::int>0 then now()+($6::text||' seconds')::interval else null end,'active',now())`,
           [oauth.organization_id,oauth.project_id,connectionId,profile.id,profile.name??null,token.expires_in??0]);
       }
@@ -139,7 +139,7 @@ export async function GET(request:NextRequest){
     await client.query(
       `insert into public.meta_authorizations(organization_id,project_id,connection_id,mode,
        external_subject_id,external_subject_name,granted_scopes,token_expires_at,status,last_validated_at)
-       values($1,$2,$3,'oauth_user',$4,$5,array['ads_read','business_management','ads_management'],
+       values($1,$2,$3,'oauth_user',$4,$5,array['ads_read','business_management','ads_management','pages_show_list','pages_read_engagement','pages_manage_ads'],
        case when $6::int>0 then now()+($6::text||' seconds')::interval else null end,'active',now())`,
       [oauth.organization_id,oauth.project_id,connection.rows[0]!.id,profile.id,profile.name??null,token.expires_in??0]);
     }
