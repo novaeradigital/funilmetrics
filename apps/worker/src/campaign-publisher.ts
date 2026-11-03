@@ -108,6 +108,17 @@ function ctaType(cta: string | undefined): string {
   return "LEARN_MORE";
 }
 
+function metaEventType(event: string): string {
+  const map: Record<string, string> = {
+    Purchase: "PURCHASE",
+    Lead: "LEAD",
+    CompleteRegistration: "COMPLETE_REGISTRATION",
+    InitiateCheckout: "INITIATE_CHECKOUT",
+    ViewContent: "VIEW_CONTENT",
+  };
+  return map[event] ?? "PURCHASE";
+}
+
 function optimizationGoal(objective: string, hasPixel: boolean): string {
   switch (objective) {
     case "OUTCOME_TRAFFIC": return "LINK_CLICKS";
@@ -236,7 +247,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
           if (payload.pixelId) {
             fields.promoted_object = {
               pixel_id: String(payload.pixelId),
-              custom_event_type: String(payload.event ?? "Purchase"),
+              custom_event_type: metaEventType(String(payload.event ?? "Purchase")),
             };
           }
           const created = await graphPost(token, `${act}/adsets`, fields);
