@@ -243,6 +243,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
             .split(",").map((c) => c.trim()).filter(Boolean);
           const targeting: Record<string, unknown> = {
             geo_locations: { countries },
+            targeting_automation: { advantage_audience: 0 },
           };
           if (Number(payload.ageMin) > 0) targeting.age_min = Number(payload.ageMin);
           if (Number(payload.ageMax) > 0) targeting.age_max = Number(payload.ageMax);
@@ -256,7 +257,6 @@ export async function processCampaignUploads(pool: pg.Pool) {
             optimization_goal: optimizationGoal(
               String(adSetConfig.objective ?? "OUTCOME_SALES"), Boolean(payload.pixelId)),
             targeting,
-            targeting_automation: { advantage_audience: 0 },
             start_time: new Date().toISOString(),
           };
           if (payload.budgetLevel !== "campaign") {
