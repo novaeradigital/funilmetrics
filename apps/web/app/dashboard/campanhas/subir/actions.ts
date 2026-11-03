@@ -228,11 +228,15 @@ export async function generateCopies(input:{
    const prompt=`Produto: ${input.productName||"nao informado"}\nCriativo: ${item.name}\nTranscricao:\n${(item.transcript??"").slice(0,20000)||"(sem transcricao; use o nome do criativo e o produto)"}`;
    let copies:CopyModel[];
    if(chosen){try{copies=await run(chosen,provider,prompt);}
-    catch{if(fallback)copies=await run(fallback,provider==="anthropic"?"openai":"anthropic",prompt);else throw new Error("provider_failed");}}
+    catch(err){if(fallback)copies=await run(fallback,provider==="anthropic"?"openai":"anthropic",prompt);else throw err;}}
    else if(fallback){copies=await run(fallback,provider==="anthropic"?"openai":"anthropic",prompt);}
    else return {ok:false,error:"Nenhum provedor de IA configurado. Configure OpenAI ou Anthropic em Integracoes."};
    out[item.creativeId]=copies!;
   }
- }catch{return {ok:false,error:"A geracao de copy falhou no provedor de IA. Tente de novo."};}
+ }catch(err){const detail=err instanceof Error?err.message:String(err);
+  const friendly=/insufficient_quota|credit/i.test(detail)?"A conta do provedor de IA esta sem creditos. Adicione creditos na OpenAI ou configure outro provedor em Integracoes.":
+   /model/i.test(detail)?"O modelo de IA configurado nao respondeu. Confira o modelo salvo em Integracoes.":
+   "A geracao de copy falhou no provedor de IA. Tente de novo.";
+  return {ok:false,error:friendly};}
  return {ok:true,copies:out};
 }
