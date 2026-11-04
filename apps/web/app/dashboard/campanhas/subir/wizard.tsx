@@ -4,7 +4,8 @@ import {createUpload,saveTemplate,generateCopies,getDestinationPages,getDestinat
 import {expandStructure,resolveNamingPattern,buildUtmQuery,type NamingContext} from "../../../../lib/campaign-naming";
 
 export type WizardAccount={id:string;externalId:string;name:string;currency:string|null};
-export type WizardCreative={id:string;name:string;format:string;mimeType:string;transcript:string|null};
+export type WizardCreative={id:string;name:string;format:string;mimeType:string;transcript:string|null;folderId:string|null;folderName:string|null};
+export type WizardFolder={id:string;name:string};
 export type WizardTemplate={id:string;name:string;config:Record<string,unknown>};
 type CopyModel={primaryText:string;headline:string;cta:string};
 type DestinationState={pageId:string;instagramId:string;pixelId:string;event:string};
@@ -14,13 +15,15 @@ type PixelsState={loading:boolean;error?:string;pixels:DestinationPixel[]};
 const OBJECTIVES=["OUTCOME_SALES","OUTCOME_LEADS","OUTCOME_TRAFFIC","OUTCOME_ENGAGEMENT","OUTCOME_AWARENESS"];
 const EVENTS=["Purchase","Lead","CompleteRegistration","InitiateCheckout","ViewContent"];
 
-export function UploadWizard({accounts,creatives,templates,products}:{
- accounts:WizardAccount[];creatives:WizardCreative[];templates:WizardTemplate[];products:string[];
+export function UploadWizard({accounts,creatives,templates,products,folders}:{
+ accounts:WizardAccount[];creatives:WizardCreative[];templates:WizardTemplate[];products:string[];folders:WizardFolder[];
 }){
  const [step,setStep]=useState(1);
  const [selectedAccounts,setSelectedAccounts]=useState<string[]>([]);
  const [destinations,setDestinations]=useState<Record<string,DestinationState>>({});
  const [selectedCreatives,setSelectedCreatives]=useState<string[]>([]);
+ const [creativeSearch,setCreativeSearch]=useState("");
+ const [creativeFolder,setCreativeFolder]=useState("");
  const [productName,setProductName]=useState(products[0]??"");
  const [preset,setPreset]=useState("1-3-1");
  const [structure,setStructure]=useState({campaigns:1,adSetsPerCampaign:3,adsPerAdSet:1,duplications:1,distribution:"rotate" as "rotate"|"sequence"|"all"});
@@ -37,6 +40,10 @@ export function UploadWizard({accounts,creatives,templates,products}:{
  const [pending,startTransition]=useTransition();
 
  const creativeById=useMemo(()=>new Map(creatives.map(c=>[c.id,c])),[creatives]);
+ const visibleCreatives=useMemo(()=>creatives.filter(c=>
+  (!creativeFolder||(creativeFolder==="none"?!c.folderId:c.folderId===creativeFolder))
+  &&(!creativeSearch||c.name.toLowerCase().includes(creativeSearch.toLowerCase()))),
+  [creatives,creativeFolder,creativeSearch]);
  const selectedCreativeObjs=selectedCreatives.map(id=>creativeById.get(id)).filter(Boolean) as WizardCreative[];
 
  function applyPreset(value:string){
@@ -240,10 +247,18 @@ export function UploadWizard({accounts,creatives,templates,products}:{
    <p>Upload manual e link de pasta do Drive entram pela Biblioteca (grupo Criativos). Aqui voce escolhe os criativos prontos.</p>
    <label>Produto<input list="wizard-products" value={productName} onChange={e=>setProductName(e.target.value)}/></label>
    <datalist id="wizard-products">{products.map(p=><option key={p} value={p}/>)}</datalist>
-   {creatives.map(creative=><div key={creative.id} style={{borderTop:"1px solid #eee",padding:"8px 0"}}>
+   <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",margin:"10px 0"}}>
+    <button type="button" className={!creativeFolder?"period-active":"secondary-button"} onClick={()=>setCreativeFolder("")}>Todas as pastas</button>
+    {folders.map(folder=><button key={folder.id} type="button" className={creativeFolder===folder.id?"period-active":"secondary-button"} onClick={()=>setCreativeFolder(folder.id)}>{folder.name}</button>)}
+    <button type="button" className={creativeFolder==="none"?"period-active":"secondary-button"} onClick={()=>setCreativeFolder("none")}>Sem pasta</button>
+   </div>
+   <label>Buscar criativo<input value={creativeSearch} onChange={e=>setCreativeSearch(e.target.value)} placeholder="Nome do criativo"/></label>
+   <p>{visibleCreatives.length} criativo(s) visivel(is) · {selectedCreatives.length} selecionado(s)</p>
+   {visibleCreatives.map(creative=><div key={creative.id} style={{borderTop:"1px solid #eee",padding:"8px 0"}}>
     <label><input type="checkbox" checked={selectedCreatives.includes(creative.id)} onChange={()=>toggleCreative(creative.id)}/>
-    <strong>{creative.name}</strong> ({creative.format}) {creative.transcript?" · com transcricao":" · sem transcricao"}</label>
+    <strong>{creative.name}</strong> ({creative.format}){creative.folderName?` · pasta ${creative.folderName}`:""} {creative.transcript?" · com transcricao":" · sem transcricao"}</label>
    </div>)}
+   {creatives.length>0&&!visibleCreatives.length&&<p>Nenhum criativo nesta pasta ou busca.</p>}
    {!creatives.length&&<p>Nenhum criativo pronto na Biblioteca deste projeto.</p>}
   </section>}
 

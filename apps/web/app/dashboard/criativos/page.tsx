@@ -13,6 +13,12 @@ import { DriveImportButton } from "./drive-import-button";
 import { loadProjectR2PreviewConfig } from "../../../lib/r2-preview";
 import { creativeImportReadiness } from "../../../lib/creative-import-readiness";
 import { saveDriveSyncSchedule } from "./sync-actions";
+import {
+  createCreativeFolder,
+  renameCreativeFolder,
+  deleteCreativeFolder,
+  moveCreativeToFolder,
+} from "./folders-actions";
 import {getActiveProject} from "../../../lib/active-project";
 import {DashboardSidebar} from "../dashboard-sidebar";
 import {DashboardTopbar} from "../dashboard-topbar";
@@ -68,7 +74,15 @@ type CreativeLibraryItem = {
   size_bytes: string;
   source_modified_at: Date;
   folder_name: string;
+  creative_folder_id: string | null;
+  creative_folder_name: string | null;
   total_count: string;
+};
+
+type CreativeFolderRow = {
+  id: string;
+  name: string;
+  total: number;
 };
 
 const driveOAuthErrorMessages: Record<string, string> = {
@@ -102,7 +116,7 @@ type DriveChangeItem = {
 type PageProps = {
   searchParams: Promise<{
     status?: string; q?: string; creative_status?: string;
-    media_type?: string; folder?: string; page?: string;
+    media_type?: string; folder?: string; cfolder?: string; page?: string;
   }>;
 };
 
@@ -113,6 +127,8 @@ export default async function CreativesPage({ searchParams }: PageProps) {
   const mediaType=["image","video","text","document"].includes(params.media_type??"")
     ? params.media_type??"" : "";
   const folderFilter=/^[0-9a-f-]{36}$/i.test(params.folder??"")?params.folder??"":"";
+  const cfolderFilter=params.cfolder==="none"?"none"
+    :/^[0-9a-f-]{36}$/i.test(params.cfolder??"")?params.cfolder??"":"";
   const page=Math.max(1,Math.min(1000,Number(params.page)||1));
   const pageSize=24;
   const supabase = await createClient();
@@ -281,19 +297,62 @@ export default async function CreativesPage({ searchParams }: PageProps) {
       [summary.project_id],
     )
   ).rows;
+  const creativeFolders = (
+    await database.pool.query<CreativeFolderRow>(
+      `select folder.id::text, folder.name,
+              (select count(*)::int from public.creatives item
+                 join public.creative_versions item_version
+                   on item_version.id = item.current_version_id
+                 join public.creative_assets item_asset
+                   on item_asset.id = item_version.asset_id
+                where item.folder_id = folder.id
+                  and item_asset.malware_status = 'clean'
+                  and item_asset.available_at is not null) as total
+         from public.creative_folders folder
+        where folder.project_id = $1
+        order by folder.name`,
+      [summary.project_id],
+    )
+  ).rows;
+  const unfiledCount = (
+    await database.pool.query<{ total: number }>(
+      `select count(*)::int as total from public.creatives item
+         join public.creative_versions item_version
+           on item_version.id = item.current_version_id
+         join public.creative_assets item_asset
+           on item_asset.id = item_version.asset_id
+        where item.project_id = $1 and item.folder_id is null
+          and item_asset.malware_status = 'clean'
+          and item_asset.available_at is not null`,
+      [summary.project_id],
+    )
+  ).rows[0]?.total ?? 0;
+  const cfolderHref = (target: string) => {
+    const query = new URLSearchParams();
+    if (search) query.set("q", search);
+    if (creativeStatus) query.set("creative_status", creativeStatus);
+    if (mediaType) query.set("media_type", mediaType);
+    if (folderFilter) query.set("folder", folderFilter);
+    if (target) query.set("cfolder", target);
+    const suffix = query.toString();
+    return suffix ? `/dashboard/criativos?${suffix}` : "/dashboard/criativos";
+  };
   const library = (
     await database.pool.query<CreativeLibraryItem>(
       `select creative.id, creative.name, creative.status::text,
               version.id as version_id, version.version_number,
               asset.id as asset_id, asset.mime_type, asset.size_bytes::text,
-              version.source_modified_at, folder.name as folder_name,
+              version.source_modified_at, coalesce(folder.name, '') as folder_name,
+              creative.folder_id::text as creative_folder_id,
+              cfolder.name as creative_folder_name,
               count(*) over()::text total_count
          from public.creatives creative
          join public.creative_versions version
            on version.id = creative.current_version_id
          join public.creative_assets asset on asset.id = version.asset_id
-         join public.drive_files file on file.id = version.source_drive_file_id
-         join public.drive_folders folder on folder.id = file.drive_folder_id
+         left join public.drive_files file on file.id = version.source_drive_file_id
+         left join public.drive_folders folder on folder.id = file.drive_folder_id
+         left join public.creative_folders cfolder on cfolder.id = creative.folder_id
         where creative.project_id = $1
           and asset.malware_status = 'clean'
           and asset.available_at is not null
@@ -306,10 +365,13 @@ export default async function CreativesPage({ searchParams }: PageProps) {
             ($4 = 'document' and asset.mime_type in ('application/pdf',
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document')))
           and ($5::uuid is null or folder.id = $5)
+          and ($8::text = '' or
+            ($8 = 'none' and creative.folder_id is null) or
+            creative.folder_id::text = $8)
         order by creative.updated_at desc
         limit $6 offset $7`,
       [summary.project_id,search,creativeStatus,mediaType,folderFilter||null,
-       pageSize,(page-1)*pageSize],
+       pageSize,(page-1)*pageSize,cfolderFilter],
     )
   ).rows;
   const totalLibrary=Number(library[0]?.total_count??0);
@@ -320,6 +382,7 @@ export default async function CreativesPage({ searchParams }: PageProps) {
     if(creativeStatus)query.set("creative_status",creativeStatus);
     if(mediaType)query.set("media_type",mediaType);
     if(folderFilter)query.set("folder",folderFilter);
+    if(cfolderFilter)query.set("cfolder",cfolderFilter);
     query.set("page",String(target));
     return `/dashboard/criativos?${query.toString()}`;
   };
@@ -350,6 +413,12 @@ export default async function CreativesPage({ searchParams }: PageProps) {
           {params.status === "oauth-denied" ? <div className="notice notice-error">A autorização foi cancelada no Google. Nenhum acesso foi salvo.</div> : null}
           {params.status?.startsWith("oauth-") && params.status !== "oauth-denied" ? <div className="notice notice-error">{driveOAuthErrorMessages[params.status]??"Não foi possível concluir o OAuth com segurança. Verifique a configuração e tente novamente."}</div> : null}
           {params.status === "forbidden" ? <div className="notice notice-error">Seu papel não permite conectar o Google Drive neste projeto.</div> : null}
+          {params.status === "folder-created" ? <div className="notice notice-success">Pasta criada. Use o campo Pasta nos cartões para organizar os criativos.</div> : null}
+          {params.status === "folder-renamed" ? <div className="notice notice-success">Pasta renomeada.</div> : null}
+          {params.status === "folder-deleted" ? <div className="notice notice-success">Pasta excluída. Os criativos dela voltaram para Sem pasta.</div> : null}
+          {params.status === "creative-moved" ? <div className="notice notice-success">Criativo movido.</div> : null}
+          {params.status === "folder-duplicate" ? <div className="notice notice-error">Já existe uma pasta com esse nome neste projeto.</div> : null}
+          {params.status === "folder-invalid" ? <div className="notice notice-error">Informe um nome de pasta válido.</div> : null}
           {oauthConfigurationInvalid ? <div className="notice notice-error">A configuração OAuth do servidor está incompleta ou inválida.</div> : null}
           {summary.drive_connection_id && !folderReadAuthorized ? (
             <div className="notice notice-error">
@@ -539,6 +608,51 @@ export default async function CreativesPage({ searchParams }: PageProps) {
           </details>
 
           {summary.creatives ? (
+            <>
+            <section className="creative-folders">
+              <div className="section-heading">
+                <div>
+                  <p className="panel-label">Organização</p>
+                  <h2>Pastas da biblioteca</h2>
+                </div>
+                <span>{creativeFolders.length} pasta(s)</span>
+              </div>
+              <nav aria-label="Pastas da biblioteca" className="period-filter">
+                <Link className={!cfolderFilter ? "period-active" : undefined} href={cfolderHref("")}>Todas</Link>
+                {creativeFolders.map((folder) => (
+                  <Link key={folder.id} className={cfolderFilter === folder.id ? "period-active" : undefined} href={cfolderHref(folder.id)}>
+                    {folder.name} ({folder.total})
+                  </Link>
+                ))}
+                <Link className={cfolderFilter === "none" ? "period-active" : undefined} href={cfolderHref("none")}>Sem pasta ({unfiledCount})</Link>
+              </nav>
+              <form action={createCreativeFolder} className="inline-filter-form">
+                <input name="project_id" type="hidden" value={summary.project_id} />
+                <label>Nova pasta<input maxLength={80} name="name" placeholder="Ex.: Lançamento de janeiro" required /></label>
+                <button type="submit">Criar pasta</button>
+              </form>
+              {creativeFolders.map((folder) => (
+                <div className="folder-admin-row" key={folder.id}>
+                  <strong>{folder.name}</strong>
+                  <span>{folder.total} criativo(s)</span>
+                  <details>
+                    <summary>Renomear</summary>
+                    <form action={renameCreativeFolder} className="inline-filter-form">
+                      <input name="project_id" type="hidden" value={summary.project_id} />
+                      <input name="folder_id" type="hidden" value={folder.id} />
+                      <label>Nome<input defaultValue={folder.name} maxLength={80} name="name" required /></label>
+                      <button type="submit">Salvar</button>
+                    </form>
+                  </details>
+                  <form action={deleteCreativeFolder}>
+                    <input name="project_id" type="hidden" value={summary.project_id} />
+                    <input name="folder_id" type="hidden" value={folder.id} />
+                    <button className="secondary-button" type="submit">Excluir pasta</button>
+                  </form>
+                </div>
+              ))}
+            </section>
+
             <section className="creative-library">
               <div className="section-heading">
                 <div>
@@ -558,12 +672,17 @@ export default async function CreativesPage({ searchParams }: PageProps) {
                   <option value="image">Imagem</option><option value="text">Texto</option>
                   <option value="document">Documento</option>
                 </select></label>
-                <label>Pasta<select defaultValue={folderFilter} name="folder">
+                <label>Pasta do Drive<select defaultValue={folderFilter} name="folder">
                   <option value="">Todas</option>
                   {folders.map((folder)=><option key={folder.id} value={folder.id}>{folder.name}</option>)}
                 </select></label>
+                <label>Pasta da biblioteca<select defaultValue={cfolderFilter} name="cfolder">
+                  <option value="">Todas</option>
+                  <option value="none">Sem pasta</option>
+                  {creativeFolders.map((folder)=><option key={folder.id} value={folder.id}>{folder.name}</option>)}
+                </select></label>
                 <button type="submit">Filtrar</button>
-                {(search||creativeStatus||mediaType||folderFilter)?<Link className="secondary-button" href="/dashboard/criativos">Limpar</Link>:null}
+                {(search||creativeStatus||mediaType||folderFilter||cfolderFilter)?<Link className="secondary-button" href="/dashboard/criativos">Limpar</Link>:null}
               </form>
               {!previewConfigured ? (
                 <div className="notice notice-error">
@@ -611,7 +730,18 @@ export default async function CreativesPage({ searchParams }: PageProps) {
                           <small>Versão {creative.version_number}</small>
                         </div>
                         <h3>{creative.name}</h3>
-                        <p>{creative.folder_name}</p>
+                        {creative.folder_name ? <p>{creative.folder_name}</p> : null}
+                        <form action={moveCreativeToFolder} className="creative-move-form">
+                          <input name="creative_id" type="hidden" value={creative.id} />
+                          <input name="project_id" type="hidden" value={summary.project_id} />
+                          <label>Pasta da biblioteca
+                            <select defaultValue={creative.creative_folder_id ?? ""} name="folder_id">
+                              <option value="">Sem pasta</option>
+                              {creativeFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+                            </select>
+                          </label>
+                          <button type="submit">Mover</button>
+                        </form>
                         <small>
                           {creative.mime_type} ·{" "}
                           {(Number(creative.size_bytes) / 1024 / 1024).toFixed(2)} MB
@@ -633,6 +763,7 @@ export default async function CreativesPage({ searchParams }: PageProps) {
                 {page<totalPages?<Link href={pageHref(page+1)}>Próxima →</Link>:null}
               </nav>:null}
             </section>
+            </>
           ) : null}
 
           {summary.pending_jobs || summary.failed_jobs ? (
