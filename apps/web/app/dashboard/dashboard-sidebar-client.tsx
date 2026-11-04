@@ -15,6 +15,11 @@ const navigationGroups=[
   {href:"/dashboard/gerenciador-anuncios",label:"Gerenciador de anúncios"},
   {href:"/dashboard/campanhas/subir",label:"Subir campanhas"},
   {href:"/dashboard/campanhas/publicacoes",label:"Publicações"}]},
+ {key:"tracking",label:"Rastreamento",icon:"funnel",items:[
+  {href:"/dashboard/tracking",label:"Visão geral"},
+  {href:"/dashboard/integracoes/tracking",label:"Fontes e script"},
+  {href:"/dashboard/tracking/pixels",label:"Pixels Meta"},
+  {href:"/dashboard/tracking/eventos",label:"Eventos enviados"}]},
  {key:"performance",label:"Performance",icon:"campaigns",items:[
   {href:"/dashboard/vendas",label:"Vendas"},
   {href:"/dashboard/produtos",label:"Produtos"},{href:"/dashboard/atribuicao",label:"Atribuição"},
@@ -23,7 +28,7 @@ const navigationGroups=[
   {href:"/dashboard/scoring",label:"Scoring"}]},
  {key:"funnels",label:"Funis e páginas",icon:"funnel",items:[
   {href:"/dashboard/funil",label:"Funil observado"},{href:"/dashboard/funis",label:"Definir funis"},
-  {href:"/dashboard/tracking",label:"Rastreamento"},{href:"/dashboard/experimentos",label:"Testes A/B"},
+  {href:"/dashboard/experimentos",label:"Testes A/B"},
   {href:"/dashboard/simulador",label:"Simulador"}]},
  {key:"creatives",label:"Criativos",icon:"creatives",items:[
   {href:"/dashboard/criativos",label:"Biblioteca"},{href:"/dashboard/campanhas/criativos",label:"Criativos Meta"},
@@ -38,6 +43,7 @@ const navigationGroups=[
 function routeMatches(activeHref:string,href:string){
  const pathname=href.split("?")[0]??href;
  if(pathname==="/dashboard-v2")return activeHref==="/dashboard-v2";
+ if(pathname==="/dashboard/tracking")return activeHref==="/dashboard/tracking";
  return pathname==="/dashboard"?activeHref===pathname:activeHref===pathname||activeHref.startsWith(`${pathname}/`);
 }
 
