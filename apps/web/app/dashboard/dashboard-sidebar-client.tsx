@@ -23,7 +23,7 @@ const navigationGroups=[
   {href:"/dashboard/scoring",label:"Scoring"}]},
  {key:"funnels",label:"Funis e páginas",icon:"funnel",items:[
   {href:"/dashboard/funil",label:"Funil observado"},{href:"/dashboard/funis",label:"Definir funis"},
-  {href:"/dashboard/tracking",label:"Páginas e VSL"},{href:"/dashboard/experimentos",label:"Testes A/B"},
+  {href:"/dashboard/tracking",label:"Rastreamento"},{href:"/dashboard/experimentos",label:"Testes A/B"},
   {href:"/dashboard/simulador",label:"Simulador"}]},
  {key:"creatives",label:"Criativos",icon:"creatives",items:[
   {href:"/dashboard/criativos",label:"Biblioteca"},{href:"/dashboard/campanhas/criativos",label:"Criativos Meta"},

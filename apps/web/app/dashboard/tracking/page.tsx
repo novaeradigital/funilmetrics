@@ -3,6 +3,7 @@ import {createClient} from "../../../lib/supabase/server";import {getActiveProje
 import {getDatabase} from "../../../lib/database";
 import {DashboardSidebar} from "../dashboard-sidebar";
 import {DashboardTopbar} from "../dashboard-topbar";
+import {TrackingTabs} from "./tabs";
 export const dynamic="force-dynamic";
 const periods={"7":7,"30":30,"90":90} as const;
 type Summary={events:number;visitors:number;sessions:number;bots:number;page_views:number;
@@ -60,8 +61,8 @@ export default async function Page({searchParams}:{searchParams:Promise<{period?
   and ($3='' or conversion.tracking_source_id::text=$3)`,values)).rows[0]!;
  const rate=(value:number)=>summary.video_plays?`${(value/summary.video_plays*100).toFixed(1)}%`:"—";
  return <main className="app-layout"><DashboardSidebar activeHref="/dashboard/tracking" footerLabel="Tracking próprio"/>
- <section className="app-content"><DashboardTopbar returnTo="/dashboard/tracking" statusLabel="Tracking próprio"/><div className="dashboard-main">
- <header className="dashboard-titlebar"><div><p className="eyebrow">Tracking próprio · regra v1</p><h1>Páginas e VSL</h1>
+ <section className="app-content"><DashboardTopbar returnTo="/dashboard/tracking" statusLabel="Tracking próprio"/><div className="dashboard-main"><TrackingTabs active="overview" />
+ <header className="dashboard-titlebar"><div><p className="eyebrow">Tracking próprio · regra v1</p><h1>Rastreamento</h1>
  <p className="dashboard-context">Comportamento observado nas fontes do projeto. Bots ficam fora dos indicadores principais.</p></div>
  <form className="inline-filter-form"><label>Fonte<select name="source" defaultValue={source}><option value="">Todas</option>{sources.map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
  <label>Período<select name="period" defaultValue={periodKey}><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option></select></label><button>Aplicar</button></form></header>
