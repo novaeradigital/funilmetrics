@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { loadProjectAnthropicConfig, loadProjectOpenAIConfig, type AnthropicProjectConfig, type OpenAIProjectConfig } from "./integration-credentials.js";
+import { loadProjectAnthropicConfig, loadProjectOpenAIConfig, loadProjectOpenRouterConfig, type AnthropicProjectConfig, type OpenAIProjectConfig, type OpenRouterProjectConfig } from "./integration-credentials.js";
 import { analysisCostBrl, assertAiBudgetAvailable, loadAiPricing } from "./ai-budget.js";
 
 type Job = {
@@ -124,6 +124,38 @@ async function analyzeWithAnthropic(
   };
 }
 
+async function analyzeWithOpenRouter(
+  config: OpenRouterProjectConfig, systemText: string, userText: string,
+): Promise<AnalysisResult> {
+  const response=await fetch("https://openrouter.ai/api/v1/chat/completions",{
+    method:"POST",
+    headers:{Authorization:`Bearer ${config.apiKey}`,
+      "Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:config.analysisModel,
+      messages:[
+        {role:"system",content:`${systemText}\nResponda somente com um JSON válido, sem markdown, seguindo exatamente este esquema: ${JSON.stringify(schema)}`},
+        {role:"user",content:userText}],
+    }),
+  });
+  if (!response.ok) throw new Error(`openrouter_http_${response.status}`);
+  const payload=await response.json() as {
+    choices?:Array<{message?:{content?:unknown}}>;
+    usage?:{prompt_tokens?:number;completion_tokens?:number;total_tokens?:number};
+  };
+  const text=payload.choices?.[0]?.message?.content;
+  if (typeof text!=="string" || !text.trim()) throw new Error("analysis_output_missing");
+  const cleaned=text.trim().replace(/^```(?:json)?/i,"").replace(/```$/,"").trim();
+  const inputTokens=payload.usage?.prompt_tokens??null;
+  const outputTokens=payload.usage?.completion_tokens??null;
+  return {
+    analysis: JSON.parse(cleaned),
+    inputTokens, outputTokens,
+    totalTokens: payload.usage?.total_tokens
+      ?? (inputTokens!==null && outputTokens!==null ? inputTokens+outputTokens : null),
+  };
+}
+
 function outputText(payload: ResponsePayload) {
   if (typeof payload.output_text==="string") return payload.output_text;
   for (const item of payload.output??[]) for (const content of item.content??[])
@@ -163,31 +195,45 @@ export async function processCreativeAnalysis(pool:pg.Pool,maxAttempts=5) {
       : "\n\nNão há métricas Meta ligadas a esta versão. Não formule hipóteses de desempenho.";
     const systemText="Analise somente evidências presentes na transcrição e, quando fornecidas, métricas observadas. Não invente contexto ou resultados. Trate relações entre conteúdo e desempenho apenas como hipóteses, nunca como causalidade. Seja conciso e escreva em português do Brasil.";
     const userText=`Transcrição do criativo:\n${job.transcript.slice(0,100000)}${performanceContext}`;
-    // D-172: provedor de analise configuravel (OpenAI ou Claude), com
-    // reserva automatica pelo outro provedor quando ele esta configurado.
-    let result: AnalysisResult;
+    // D-172: provedor de analise configuravel (OpenAI, Claude ou OpenRouter),
+    // com reserva automatica pelos outros provedores quando configurados.
+    let result: AnalysisResult | undefined;
     let usedModel = config.analysisModel;
-    if (config.analysisProvider==="anthropic") {
-      const anthropic=await loadProjectAnthropicConfig(pool,job.project_id);
+    let primaryError: unknown = null;
+    const tryOpenAI = async () => {
+      result = await analyzeWithOpenAI(config, systemText, userText);
+      usedModel = config.analysisModel;
+    };
+    const tryAnthropic = async () => {
+      const anthropic = await loadProjectAnthropicConfig(pool, job.project_id)
+        .catch(() => null);
       if (!anthropic) throw new Error("anthropic_configuration_missing");
+      result = await analyzeWithAnthropic(anthropic, systemText, userText);
+      usedModel = anthropic.analysisModel;
+    };
+    const tryOpenRouter = async () => {
+      const openrouter = await loadProjectOpenRouterConfig(pool, job.project_id)
+        .catch(() => null);
+      if (!openrouter) throw new Error("openrouter_configuration_missing");
+      result = await analyzeWithOpenRouter(openrouter, systemText, userText);
+      usedModel = openrouter.analysisModel;
+    };
+    const analysisAttempts = config.analysisProvider === "anthropic"
+      ? [tryAnthropic, tryOpenAI, tryOpenRouter]
+      : config.analysisProvider === "openrouter"
+        ? [tryOpenRouter, tryOpenAI, tryAnthropic]
+        : [tryOpenAI, tryAnthropic, tryOpenRouter];
+    for (const attempt of analysisAttempts) {
       try {
-        result=await analyzeWithAnthropic(anthropic,systemText,userText);
-        usedModel=anthropic.analysisModel;
-      } catch {
-        result=await analyzeWithOpenAI(config,systemText,userText);
-        usedModel=config.analysisModel;
-      }
-    } else {
-      try {
-        result=await analyzeWithOpenAI(config,systemText,userText);
-      } catch (primaryError) {
-        const anthropic=await loadProjectAnthropicConfig(pool,job.project_id)
-          .catch(()=>null);
-        if (!anthropic) throw primaryError;
-        result=await analyzeWithAnthropic(anthropic,systemText,userText);
-        usedModel=anthropic.analysisModel;
+        await attempt();
+        primaryError = null;
+        break;
+      } catch (error) {
+        if (!primaryError) primaryError = error;
+        result = undefined;
       }
     }
+    if (!result) throw primaryError ?? new Error("analysis_provider_failed");
     const analysis=result.analysis as {
       hook:string|null;promise:string|null;mechanism:string|null;cta:string|null;
       proof:string[];objections:string[];structure:string[];

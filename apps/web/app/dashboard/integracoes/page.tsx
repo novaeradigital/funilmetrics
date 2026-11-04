@@ -134,6 +134,14 @@ export default async function IntegrationsPage({
       detail: "Chave da API e modelo de transcrição de áudio dos vídeos (Whisper).",
       cta: "Gerenciar",
     },
+    {
+      id: "openrouter",
+      name: "OpenRouter",
+      href: "/dashboard/integracoes/openrouter",
+      ...providerStatus(byProvider.get("openrouter")),
+      detail: "Chave da API e modelos. Um saldo só para Claude, GPT, Gemini e outros, quando o OpenRouter é a ferramenta escolhida no cartão da OpenAI.",
+      cta: "Gerenciar",
+    },
   ];
   const infraestrutura: HubCard[] = [
     {

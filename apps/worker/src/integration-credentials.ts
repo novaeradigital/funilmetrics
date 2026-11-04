@@ -45,7 +45,7 @@ export function decryptCredentialBundle(
 async function storedIntegration(
   pool: pg.Pool,
   projectId: string,
-  provider: "cloudflare_r2" | "clamav" | "google_drive_app" | "openai" | "anthropic" | "groq",
+  provider: "cloudflare_r2" | "clamav" | "google_drive_app" | "openai" | "anthropic" | "groq" | "openrouter",
 ) {
   const result = await pool.query<StoredIntegration>(
     `select connection.provider, connection.configuration,
@@ -75,8 +75,8 @@ export type OpenAIProjectConfig = {
   analysisModel: string;
   transcriptionModel: string;
   monthlyBudgetBrl: number;
-  analysisProvider: "openai" | "anthropic";
-  transcriptionProvider: "openai" | "groq";
+  analysisProvider: "openai" | "anthropic" | "openrouter";
+  transcriptionProvider: "openai" | "groq" | "openrouter";
 };
 
 export async function loadProjectOpenAIConfig(
@@ -104,13 +104,19 @@ export async function loadProjectOpenAIConfig(
   ) {
     throw new Error("openai_configuration_incomplete");
   }
-  const analysisProvider =
-    String(stored.configuration.analysisProvider ?? "openai").trim() === "anthropic"
-      ? "anthropic" as const
+  const analysisRaw =
+    String(stored.configuration.analysisProvider ?? "openai").trim();
+  const analysisProvider = analysisRaw === "anthropic"
+    ? "anthropic" as const
+    : analysisRaw === "openrouter"
+      ? "openrouter" as const
       : "openai" as const;
-  const transcriptionProvider =
-    String(stored.configuration.transcriptionProvider ?? "openai").trim() === "groq"
-      ? "groq" as const
+  const transcriptionRaw =
+    String(stored.configuration.transcriptionProvider ?? "openai").trim();
+  const transcriptionProvider = transcriptionRaw === "groq"
+    ? "groq" as const
+    : transcriptionRaw === "openrouter"
+      ? "openrouter" as const
       : "openai" as const;
   return {
     apiKey, analysisModel, transcriptionModel, monthlyBudgetBrl,
@@ -162,6 +168,32 @@ export async function loadProjectAnthropicConfig(
     throw new Error("anthropic_configuration_incomplete");
   }
   return { apiKey, analysisModel };
+}
+
+export type OpenRouterProjectConfig = {
+  apiKey: string;
+  analysisModel: string;
+  transcriptionModel: string;
+};
+
+export async function loadProjectOpenRouterConfig(
+  pool: pg.Pool,
+  projectId: string,
+): Promise<OpenRouterProjectConfig | null> {
+  const stored = await storedIntegration(pool, projectId, "openrouter");
+  if (!stored) return null;
+  const key = vaultKey();
+  if (!key) throw new Error("integration_vault_disabled");
+  const secret = decryptCredentialBundle(stored, key);
+  const apiKey = String(secret.apiKey ?? "").trim();
+  const analysisModel = String(stored.configuration.analysisModel ?? "").trim();
+  const transcriptionModel = String(
+    stored.configuration.transcriptionModel ?? "",
+  ).trim();
+  if (!apiKey || !analysisModel || !transcriptionModel) {
+    throw new Error("openrouter_configuration_incomplete");
+  }
+  return { apiKey, analysisModel, transcriptionModel };
 }
 
 export type GoogleDriveAppConfig = {

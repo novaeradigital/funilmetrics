@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { spawn } from "node:child_process";
 import type pg from "pg";
-import { loadProjectGroqConfig, loadProjectOpenAIConfig, loadProjectR2Config } from "./integration-credentials.js";
+import { loadProjectGroqConfig, loadProjectOpenAIConfig, loadProjectOpenRouterConfig, loadProjectR2Config } from "./integration-credentials.js";
 import { R2CreativeStorage } from "./r2-storage.js";
 import { assertAiBudgetAvailable, loadAiPricing, transcriptionCostBrl } from "./ai-budget.js";
 
@@ -169,11 +169,12 @@ export async function processCreativeTranscription(
     const audioInfo = await stat(audio);
     if (audioInfo.size <= 0) throw new Error("transcription_empty");
     const audioSeconds=await audioDurationSeconds(audio);
-    // D-172: provedor de transcricao configuravel (Groq ou OpenAI), com
-    // reserva automatica pelo outro provedor quando ele esta configurado.
+    // D-172: provedor de transcricao configuravel (Groq, OpenAI ou
+    // OpenRouter), com reserva automatica pelos outros quando configurados.
     const groqConfig = await loadProjectGroqConfig(pool, job.project_id);
+    const openrouterConfig = await loadProjectOpenRouterConfig(pool, job.project_id);
     type TxAttempt = {
-      provider: "groq" | "openai"; apiKey: string; model: string;
+      provider: "groq" | "openai" | "openrouter"; apiKey: string; model: string;
       endpoint: string; maxBytes: number;
     };
     const openaiAttempt: TxAttempt = {
@@ -186,9 +187,24 @@ export async function processCreativeTranscription(
       endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
       maxBytes: 100 * 1024 * 1024,
     } : null;
-    const attempts: TxAttempt[] = openai.transcriptionProvider === "groq" && groqAttempt
-      ? [groqAttempt, openaiAttempt]
-      : groqAttempt ? [openaiAttempt, groqAttempt] : [openaiAttempt];
+    const openrouterAttempt: TxAttempt | null = openrouterConfig ? {
+      provider: "openrouter", apiKey: openrouterConfig.apiKey,
+      model: openrouterConfig.transcriptionModel,
+      endpoint: "https://openrouter.ai/api/v1/audio/transcriptions",
+      maxBytes: 24 * 1024 * 1024,
+    } : null;
+    const attemptsByProvider = new Map<string, TxAttempt>();
+    attemptsByProvider.set("openai", openaiAttempt);
+    if (groqAttempt) attemptsByProvider.set("groq", groqAttempt);
+    if (openrouterAttempt) attemptsByProvider.set("openrouter", openrouterAttempt);
+    const primaryAttempt =
+      attemptsByProvider.get(openai.transcriptionProvider) ?? openaiAttempt;
+    const attempts: TxAttempt[] = [
+      primaryAttempt,
+      ...[...attemptsByProvider.values()].filter(
+        (attempt) => attempt !== primaryAttempt,
+      ),
+    ];
     let transcript: Awaited<ReturnType<typeof transcribe>> | null = null;
     let usedModel = openai.transcriptionModel;
     let lastError: unknown = null;

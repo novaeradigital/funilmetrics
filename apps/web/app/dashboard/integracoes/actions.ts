@@ -23,6 +23,7 @@ const supported = new Set([
   "openai",
   "anthropic",
   "groq",
+  "openrouter",
   "cloudflare_r2",
   "clamav",
   "google_drive_app",
@@ -127,8 +128,12 @@ export async function saveIntegrationConfiguration(formData: FormData) {
     configuration.monthlyBudgetBrl = monthlyBudget;
     const analysisProvider = field(formData, "analysis_provider", 20);
     const transcriptionProvider = field(formData, "transcription_provider", 20);
-    configuration.analysisProvider = analysisProvider === "anthropic" ? "anthropic" : "openai";
-    configuration.transcriptionProvider = transcriptionProvider === "groq" ? "groq" : "openai";
+    configuration.analysisProvider = analysisProvider === "anthropic"
+      ? "anthropic"
+      : analysisProvider === "openrouter" ? "openrouter" : "openai";
+    configuration.transcriptionProvider = transcriptionProvider === "groq"
+      ? "groq"
+      : transcriptionProvider === "openrouter" ? "openrouter" : "openai";
   } else if (provider === "anthropic") {
     const apiKey = field(formData, "api_key", 500);
     const analysisModel = field(formData, "analysis_model", 120);
@@ -144,6 +149,16 @@ export async function saveIntegrationConfiguration(formData: FormData) {
       redirect("/dashboard/integracoes?status=invalid");
     }
     secrets.apiKey = apiKey;
+    configuration.transcriptionModel = transcriptionModel;
+  } else if (provider === "openrouter") {
+    const apiKey = field(formData, "api_key", 500);
+    const analysisModel = field(formData, "analysis_model", 120);
+    const transcriptionModel = field(formData, "transcription_model", 120);
+    if (!apiKey.startsWith("sk-or-") || !analysisModel || !transcriptionModel) {
+      redirect("/dashboard/integracoes?status=invalid");
+    }
+    secrets.apiKey = apiKey;
+    configuration.analysisModel = analysisModel;
     configuration.transcriptionModel = transcriptionModel;
   } else if (provider === "cloudflare_r2") {
     const accountId = field(formData, "account_id", 200);
@@ -257,6 +272,8 @@ export async function saveIntegrationConfiguration(formData: FormData) {
                 ? "Anthropic (Claude)"
               : provider === "groq"
                 ? "Groq"
+              : provider === "openrouter"
+                ? "OpenRouter"
                 : provider === "cloudflare_r2"
                   ? "Cloudflare R2"
                   : provider === "railway"

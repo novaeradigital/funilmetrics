@@ -165,7 +165,7 @@ export async function saveTemplate(formData:FormData){
 
 // ---------- Geracao de copy (D-170/D-172) ----------
 type StoredProvider={configuration:Record<string,unknown>;ciphertext:Buffer;initialization_vector:Buffer;authentication_tag:Buffer};
-async function loadProvider(projectId:string,provider:"openai"|"anthropic"){
+async function loadProvider(projectId:string,provider:"openai"|"anthropic"|"openrouter"){
  const db=getDatabase();
  const stored=(await db.pool.query<StoredProvider>(`select connection.configuration,secret.ciphertext,
   secret.initialization_vector,secret.authentication_tag from public.connections connection
@@ -196,6 +196,20 @@ async function callOpenAi(apiKey:string,model:string,prompt:string):Promise<Copy
  for(const item of payload.output??[])for(const content of item.content??[])
   if(content.type==="output_text"&&typeof content.text==="string")text=content.text;
  const parsed=JSON.parse(text) as {copies:CopyModel[]};
+ return parsed.copies.slice(0,3);
+}
+
+async function callOpenRouter(apiKey:string,model:string,prompt:string):Promise<CopyModel[]>{
+ const response=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",
+  headers:{Authorization:`Bearer ${apiKey}`,"Content-Type":"application/json"},
+  body:JSON.stringify({model,messages:[
+   {role:"system",content:copyInstruction},{role:"user",content:prompt}]})});
+ if(response.status===402)throw new Error("insufficient_quota");
+ if(!response.ok)throw new Error(`openrouter_http_${response.status}`);
+ const payload=await response.json() as {choices?:Array<{message?:{content?:string}}>};
+ const text=payload.choices?.[0]?.message?.content??"";
+ const cleaned=text.trim().replace(/^```(?:json)?/i,"").replace(/```$/,"").trim();
+ const parsed=JSON.parse(cleaned) as {copies:CopyModel[]};
  return parsed.copies.slice(0,3);
 }
 
@@ -277,25 +291,31 @@ export async function generateCopies(input:{
  items:Array<{creativeId:string;name:string;transcript:string|null}>;
 }):Promise<{ok:boolean;error?:string;copies?:Record<string,CopyModel[]>}>{
  const actor=await requireEditor();
+ type AiProviderName="openai"|"anthropic"|"openrouter";
  const openai=await loadProvider(actor.projectId,"openai");
- const provider=openai?.configuration.analysisProvider==="anthropic"?"anthropic":"openai";
- const chosen=provider==="anthropic"?await loadProvider(actor.projectId,"anthropic"):openai;
- const fallback=provider==="anthropic"?openai:await loadProvider(actor.projectId,"anthropic");
- const run=async(cfg:{apiKey:string;model:string},which:"openai"|"anthropic",prompt:string)=>
-  which==="anthropic"?callAnthropic(cfg.apiKey,cfg.model,prompt):callOpenAi(cfg.apiKey,cfg.model,prompt);
+ const rawProvider=openai?.configuration.analysisProvider;
+ const provider:AiProviderName=rawProvider==="anthropic"?"anthropic":rawProvider==="openrouter"?"openrouter":"openai";
+ const providers:Record<AiProviderName,{apiKey:string;model:string}|null>={
+  openai,anthropic:await loadProvider(actor.projectId,"anthropic"),
+  openrouter:await loadProvider(actor.projectId,"openrouter")};
+ const order:AiProviderName[]=[provider,...(["openai","anthropic","openrouter"] as AiProviderName[]).filter(name=>name!==provider)];
+ const run=async(cfg:{apiKey:string;model:string},which:AiProviderName,prompt:string)=>
+  which==="anthropic"?callAnthropic(cfg.apiKey,cfg.model,prompt)
+  :which==="openrouter"?callOpenRouter(cfg.apiKey,cfg.model,prompt)
+  :callOpenAi(cfg.apiKey,cfg.model,prompt);
  const out:Record<string,CopyModel[]>={};
  try{
   for(const item of input.items.slice(0,50)){
    const prompt=`Produto: ${input.productName||"nao informado"}\nCriativo: ${item.name}\nTranscricao:\n${(item.transcript??"").slice(0,20000)||"(sem transcricao; use o nome do criativo e o produto)"}`;
-   let copies:CopyModel[];
-   if(chosen){try{copies=await run(chosen,provider,prompt);}
-    catch(err){if(fallback)copies=await run(fallback,provider==="anthropic"?"openai":"anthropic",prompt);else throw err;}}
-   else if(fallback){copies=await run(fallback,provider==="anthropic"?"openai":"anthropic",prompt);}
-   else return {ok:false,error:"Nenhum provedor de IA configurado. Configure OpenAI ou Anthropic em Integracoes."};
-   out[item.creativeId]=copies!;
+   let copies:CopyModel[]|undefined;let lastError:unknown=null;
+   for(const which of order){const cfg=providers[which];if(!cfg)continue;
+    try{copies=await run(cfg,which,prompt);break;}catch(err){lastError=err;}}
+   if(!copies){if(lastError)throw lastError;
+    return {ok:false,error:"Nenhum provedor de IA configurado. Configure OpenAI, Anthropic ou OpenRouter em Integracoes."};}
+   out[item.creativeId]=copies;
   }
  }catch(err){const detail=err instanceof Error?err.message:String(err);
-  const friendly=/insufficient_quota|credit/i.test(detail)?"A conta do provedor de IA esta sem creditos. Adicione creditos na OpenAI ou configure outro provedor em Integracoes.":
+  const friendly=/insufficient_quota|credit/i.test(detail)?"A conta do provedor de IA esta sem creditos. Adicione creditos no provedor escolhido ou configure outro em Integracoes.":
    /model/i.test(detail)?"O modelo de IA configurado nao respondeu. Confira o modelo salvo em Integracoes.":
    "A geracao de copy falhou no provedor de IA. Tente de novo.";
   return {ok:false,error:friendly};}

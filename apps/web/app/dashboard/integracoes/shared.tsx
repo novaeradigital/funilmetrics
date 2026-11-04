@@ -26,6 +26,7 @@ export type IntegrationProvider =
   | "openai"
   | "anthropic"
   | "groq"
+  | "openrouter"
   | "cloudflare_r2"
   | "clamav"
   | "meta_ads"
@@ -120,7 +121,7 @@ export async function loadIntegrationContext() {
          from public.connections connection
         where connection.project_id = $1
           and connection.provider in (
-            'google_drive_app', 'openai', 'anthropic', 'groq', 'cloudflare_r2', 'clamav', 'meta_ads',
+            'google_drive_app', 'openai', 'anthropic', 'groq', 'openrouter', 'cloudflare_r2', 'clamav', 'meta_ads',
             'meta_ads_app', 'railway', 'cloudflare_account'
           )`,
       [scope.project_id],
@@ -230,9 +231,9 @@ export function IntegrationForm({ provider, title, projectId, current, disabled 
         <label>Modelo de análise<input defaultValue={String(config.analysisModel ?? "gpt-5.6-luna")} disabled={disabled} name="analysis_model" /></label>
         <label>Modelo de transcrição<input defaultValue={String(config.transcriptionModel ?? "gpt-4o-transcribe")} disabled={disabled} name="transcription_model" /></label>
         <label>Limite mensal (R$)<input defaultValue={String(config.monthlyBudgetBrl ?? "100")} disabled={disabled} min="1" name="monthly_budget_brl" type="number" /></label>
-        <label>Ferramenta de análise e copy<select defaultValue={String(config.analysisProvider ?? "openai")} disabled={disabled} name="analysis_provider"><option value="openai">OpenAI</option><option value="anthropic">Claude (Anthropic)</option></select></label>
-        <label>Ferramenta de transcrição<select defaultValue={String(config.transcriptionProvider ?? "openai")} disabled={disabled} name="transcription_provider"><option value="groq">Groq</option><option value="openai">OpenAI</option></select></label>
-        <small>Claude e Groq usam as chaves dos cartões próprios deles, nesta mesma seção. A troca vale para as próximas análises e transcrições.</small>
+        <label>Ferramenta de análise e copy<select defaultValue={String(config.analysisProvider ?? "openai")} disabled={disabled} name="analysis_provider"><option value="openai">OpenAI</option><option value="anthropic">Claude (Anthropic)</option><option value="openrouter">OpenRouter</option></select></label>
+        <label>Ferramenta de transcrição<select defaultValue={String(config.transcriptionProvider ?? "openai")} disabled={disabled} name="transcription_provider"><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option></select></label>
+        <small>Claude, Groq e OpenRouter usam as chaves dos cartões próprios deles, nesta mesma seção. A troca vale para as próximas análises e transcrições.</small>
       </> : provider === "anthropic" ? <>
         <label>Chave da API<input disabled={disabled} name="api_key" placeholder={current?.has_secret ? "•••••••••••• (substituir)" : "sk-ant-..."} type="password" /></label>
         <label>Modelo de análise e copy<input defaultValue={String(config.analysisModel ?? "claude-sonnet-4-5")} disabled={disabled} name="analysis_model" /></label>
@@ -241,6 +242,11 @@ export function IntegrationForm({ provider, title, projectId, current, disabled 
         <label>Chave da API<input disabled={disabled} name="api_key" placeholder={current?.has_secret ? "•••••••••••• (substituir)" : "gsk_..."} type="password" /></label>
         <label>Modelo de transcrição<input defaultValue={String(config.transcriptionModel ?? "whisper-large-v3-turbo")} disabled={disabled} name="transcription_model" /></label>
         <small>Transcrição de áudio dos vídeos, com o Whisper rodando na Groq. Para qualidade máxima, use whisper-large-v3.</small>
+      </> : provider === "openrouter" ? <>
+        <label>Chave da API<input disabled={disabled} name="api_key" placeholder={current?.has_secret ? "•••••••••••• (substituir)" : "sk-or-..."} type="password" /></label>
+        <label>Modelo de análise e copy<input defaultValue={String(config.analysisModel ?? "anthropic/claude-sonnet-4.5")} disabled={disabled} name="analysis_model" /></label>
+        <label>Modelo de transcrição<input defaultValue={String(config.transcriptionModel ?? "openai/whisper-large-v3-turbo")} disabled={disabled} name="transcription_model" /></label>
+        <small>Um saldo só para modelos da OpenAI, Anthropic, Google e outros, pelos nomes do OpenRouter (ex.: anthropic/claude-sonnet-4.5). A escolha da ferramenta fica no cartão da OpenAI.</small>
       </> : provider === "cloudflare_r2" ? <>
         <label>Account ID<input defaultValue={String(config.accountId ?? "")} disabled={disabled} name="account_id" /></label>
         <label>Bucket privado<input defaultValue={String(config.bucket ?? "")} disabled={disabled} name="bucket" /></label>
