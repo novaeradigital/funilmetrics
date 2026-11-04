@@ -7,6 +7,7 @@ import { R2CreativeStorage } from "./r2-storage.js";
 
 const graphVersion = "v25.0";
 const graphBase = `https://graph.facebook.com/${graphVersion}`;
+const graphVideoBase = `https://graph-video.facebook.com/${graphVersion}`;
 
 type UploadRow = {
   id: string; organization_id: string; project_id: string;
@@ -116,6 +117,57 @@ async function graphUpload(
     throw graphFailure(payload, response.status);
   }
   return payload;
+}
+
+async function graphVideoRequest(
+  token: string, base: string, path: string,
+  fields: Record<string, string>, chunk?: Buffer,
+): Promise<Record<string, any>> {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) form.append(key, value);
+  if (chunk) form.append("file_offset", new Blob([new Uint8Array(chunk)]));
+  const response = await fetch(`${base}/${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, any>;
+  if (!response.ok || payload.error) {
+    throw graphFailure(payload, response.status);
+  }
+  return payload;
+}
+
+async function uploadVideoResumable(
+  token: string, act: string, bytes: Buffer, title: string,
+): Promise<{ id: string }> {
+  const started = await graphVideoRequest(token, graphBase, `${act}/advideos`, {
+    upload_phase: "start", file_size: String(bytes.length),
+  });
+  const sessionId = String(started.upload_session_id ?? "");
+  const videoId = String(started.video_id ?? "");
+  if (!sessionId || !videoId) {
+    throw { code: "video_upload_session_failed", message: "Meta nao abriu a sessao de envio do video." } as GraphError;
+  }
+  let start = Number(started.start_offset ?? 0);
+  let end = Number(started.end_offset ?? 0);
+  let guard = 0;
+  while (start < bytes.length) {
+    guard += 1;
+    if (guard > 100 || end <= start) {
+      throw { code: "video_upload_stalled", message: "Envio do video nao avancou na Meta." } as GraphError;
+    }
+    const chunk = bytes.subarray(start, Math.min(end, bytes.length));
+    const transferred = await graphVideoRequest(token, graphVideoBase, sessionId, {
+      upload_phase: "transfer", start_offset: String(start),
+    }, chunk);
+    start = Number(transferred.start_offset ?? start + chunk.length);
+    end = Number(transferred.end_offset ?? bytes.length);
+  }
+  await graphVideoRequest(token, graphVideoBase, sessionId, {
+    upload_phase: "finish", title,
+  });
+  return { id: videoId };
 }
 
 function ctaType(cta: string | undefined): string {
@@ -308,8 +360,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
             const isVideo = asset.mime_type.startsWith("video/");
             if (isVideo) {
               if (bytes.length > 1024 * 1024 * 1024) throw { code: "media_too_large", message: "Video acima de 1 GB." } as GraphError;
-              const uploaded = await graphUpload(token, `${act}/advideos`, "source",
-                bytes, asset.mime_type, item.name, { title: item.name });
+              const uploaded = await uploadVideoResumable(token, act, bytes, item.name);
               // A Meta exige miniatura no anuncio de video; ela e gerada
               // de forma assincrona, entao espera ate aparecer.
               let imageUrl = "";
