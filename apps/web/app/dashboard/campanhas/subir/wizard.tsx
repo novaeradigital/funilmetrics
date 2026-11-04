@@ -1,6 +1,6 @@
 "use client";
 import {useMemo,useState,useTransition} from "react";
-import {createUpload,saveTemplate,generateCopies} from "./actions";
+import {createUpload,saveTemplate,generateCopies,getDestinationPages,type DestinationPage} from "./actions";
 import {expandStructure,resolveNamingPattern,buildUtmQuery,type NamingContext} from "../../../../lib/campaign-naming";
 
 export type WizardAccount={id:string;externalId:string;name:string;currency:string|null};
@@ -8,6 +8,7 @@ export type WizardCreative={id:string;name:string;format:string;mimeType:string;
 export type WizardTemplate={id:string;name:string;config:Record<string,unknown>};
 type CopyModel={primaryText:string;headline:string;cta:string};
 type DestinationState={pageId:string;instagramId:string;pixelId:string;event:string};
+type PagesState={loading:boolean;error?:string;pages:DestinationPage[]};
 
 const OBJECTIVES=["OUTCOME_SALES","OUTCOME_LEADS","OUTCOME_TRAFFIC","OUTCOME_ENGAGEMENT","OUTCOME_AWARENESS"];
 const EVENTS=["Purchase","Lead","CompleteRegistration","InitiateCheckout","ViewContent"];
@@ -30,6 +31,7 @@ export function UploadWizard({accounts,creatives,templates,products}:{
  const [chosen,setChosen]=useState<Record<string,number>>({});
  const [edited,setEdited]=useState<Record<string,CopyModel>>({});
  const [copyError,setCopyError]=useState("");
+ const [pagesByAccount,setPagesByAccount]=useState<Record<string,PagesState>>({});
  const [pending,startTransition]=useTransition();
 
  const creativeById=useMemo(()=>new Map(creatives.map(c=>[c.id,c])),[creatives]);
@@ -41,8 +43,27 @@ export function UploadWizard({accounts,creatives,templates,products}:{
   if(value==="1-1-1")setStructure(s=>({...s,campaigns:1,adSetsPerCampaign:1,adsPerAdSet:1}));
  }
  function toggleAccount(externalId:string){
+  const selecting=!selectedAccounts.includes(externalId);
   setSelectedAccounts(prev=>prev.includes(externalId)?prev.filter(a=>a!==externalId):[...prev,externalId]);
   setDestinations(prev=>prev[externalId]?prev:{...prev,[externalId]:{pageId:"",instagramId:"",pixelId:"",event:"Purchase"}});
+  if(selecting&&!pagesByAccount[externalId]){
+   setPagesByAccount(prev=>({...prev,[externalId]:{loading:true,pages:[]}}));
+   getDestinationPages(externalId).then(result=>{
+    setPagesByAccount(prev=>({...prev,[externalId]:result.ok
+     ?{loading:false,pages:result.pages??[]}
+     :{loading:false,error:result.error??"Nao foi possivel carregar as paginas.",pages:[]}}));
+   }).catch(()=>{
+    setPagesByAccount(prev=>({...prev,[externalId]:{loading:false,error:"Nao foi possivel carregar as paginas.",pages:[]}}));
+   });
+  }
+ }
+ function choosePage(externalId:string,pageId:string){
+  const page=pagesByAccount[externalId]?.pages.find(entry=>entry.id===pageId);
+  setDestinations(prev=>{
+   const current=prev[externalId]??{pageId:"",instagramId:"",pixelId:"",event:"Purchase"};
+   const instagramOk=!current.instagramId||current.instagramId===(page?.instagramId??"__none__");
+   return {...prev,[externalId]:{...current,pageId,instagramId:instagramOk?current.instagramId:""}};
+  });
  }
  function toggleCreative(id:string){
   setSelectedCreatives(prev=>prev.includes(id)?prev.filter(c=>c!==id):[...prev,id]);
@@ -166,10 +187,22 @@ export function UploadWizard({accounts,creatives,templates,products}:{
     <label><input type="checkbox" checked={selectedAccounts.includes(account.externalId)}
      onChange={()=>toggleAccount(account.externalId)}/> <strong>{account.name}</strong> ({account.externalId}) {account.currency??""}</label>
     {selectedAccounts.includes(account.externalId)&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
-     <label>Pagina<input value={destinations[account.externalId]?.pageId??""} placeholder="ID da Pagina"
-      onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{instagramId:"",pixelId:"",event:"Purchase"}),pageId:e.target.value}}))}/></label>
-     <label>Instagram<input value={destinations[account.externalId]?.instagramId??""} placeholder="ID do Instagram"
-      onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",pixelId:"",event:"Purchase"}),instagramId:e.target.value}}))}/></label>
+     <label>Pagina{pagesByAccount[account.externalId]?.loading
+      ?<span>Carregando paginas...</span>
+      :pagesByAccount[account.externalId]?.error
+       ?<span style={{color:"#c0392b"}}>{pagesByAccount[account.externalId]?.error}</span>
+       :<select value={destinations[account.externalId]?.pageId??""}
+         onChange={e=>choosePage(account.externalId,e.target.value)}>
+         <option value="">Selecione a pagina</option>
+         {(pagesByAccount[account.externalId]?.pages??[]).map(page=>
+          <option key={page.id} value={page.id}>{page.name}</option>)}
+        </select>}</label>
+     <label>Instagram<select value={destinations[account.externalId]?.instagramId??""}
+      onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",pixelId:"",event:"Purchase"}),instagramId:e.target.value}}))}>
+      <option value="">Sem Instagram (so Pagina)</option>
+      {(()=>{const sel=pagesByAccount[account.externalId]?.pages.find(page=>page.id===(destinations[account.externalId]?.pageId??""));
+       return sel?.instagramId?<option value={sel.instagramId}>@{sel.instagramUsername||sel.instagramId}</option>:null;})()}
+     </select></label>
      <label>Pixel<input value={destinations[account.externalId]?.pixelId??""} placeholder="ID do pixel"
       onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",instagramId:"",event:"Purchase"}),pixelId:e.target.value}}))}/></label>
      <label>Evento<select value={destinations[account.externalId]?.event??"Purchase"}

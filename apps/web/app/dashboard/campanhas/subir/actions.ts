@@ -6,6 +6,7 @@ import {getActiveProject} from "../../../../lib/active-project";
 import {getDatabase} from "../../../../lib/database";
 import {decryptIntegrationSecret,loadIntegrationVaultKey} from "../../../../lib/integration-vault";
 import {expandStructure,resolveNamingPattern,buildUtmQuery,type NamingContext} from "../../../../lib/campaign-naming";
+import {loadMetaConnectionAccessToken} from "../../../../lib/meta-oauth";
 
 type Actor={userId:string;projectId:string;organizationId:string};
 async function requireEditor():Promise<Actor>{
@@ -209,6 +210,46 @@ async function callAnthropic(apiKey:string,model:string,prompt:string):Promise<C
  const cleaned=text.trim().replace(/^```(?:json)?/i,"").replace(/```$/,"").trim();
  const parsed=JSON.parse(cleaned) as {copies:CopyModel[]};
  return parsed.copies.slice(0,3);
+}
+
+export type DestinationPage={id:string;name:string;instagramId:string;instagramUsername:string};
+export async function getDestinationPages(accountExternalId:string):Promise<{ok:boolean;error?:string;pages?:DestinationPage[]}>{
+ const actor=await requireEditor();
+ const db=getDatabase();
+ const account=(await db.pool.query<{connection_id:string}>(
+  "select connection_id from public.meta_ad_accounts where project_id=$1 and external_id=$2 limit 1",
+  [actor.projectId,accountExternalId])).rows[0];
+ if(!account)return {ok:false,error:"Conta nao encontrada neste projeto."};
+ let token:string|null=null;
+ try{token=await loadMetaConnectionAccessToken(db.pool,account.connection_id);}catch{token=null;}
+ if(!token)return {ok:false,error:"Conexao da Meta sem token valido. Reconecte o perfil em Integracoes."};
+ const graph=async(path:string):Promise<Record<string,unknown>>=>{
+  const res=await fetch(`https://graph.facebook.com/v25.0/${path}${path.includes("?")?"&":"?"}access_token=${encodeURIComponent(token as string)}`);
+  return (await res.json().catch(()=>({}))) as Record<string,unknown>;
+ };
+ const perms=await graph("me/permissions?limit=100").catch(()=>null);
+ const granted=new Set(((perms?.data??[]) as Array<{permission:string;status:string}>)
+  .filter(entry=>entry.status==="granted").map(entry=>entry.permission));
+ if(!granted.has("pages_show_list"))
+  return {ok:false,error:"O perfil desta conta ainda nao tem a permissao de Paginas. Reconecte a Meta em Integracoes para liberar a lista."};
+ const pages=new Map<string,DestinationPage>();
+ const addPage=(raw:Record<string,unknown>)=>{
+  const id=String(raw.id??"");
+  if(!id||pages.has(id))return;
+  const ig=(raw.instagram_business_account??raw.connected_instagram_account) as {id?:string;username?:string}|undefined;
+  pages.set(id,{id,name:String(raw.name??id),instagramId:String(ig?.id??""),instagramUsername:String(ig?.username??"")});
+ };
+ const fields="id,name,instagram_business_account{id,username},connected_instagram_account{id,username}";
+ const mine=await graph(`me/accounts?fields=${fields}&limit=100`).catch(()=>null);
+ for(const page of (mine?.data??[]) as Array<Record<string,unknown>>)addPage(page);
+ const businesses=await graph("me/businesses?fields=id&limit=50").catch(()=>null);
+ for(const business of (businesses?.data??[]) as Array<{id:string}>){
+  for(const kind of ["owned_pages","client_pages"]){
+   const res=await graph(`${business.id}/${kind}?fields=${fields}&limit=100`).catch(()=>null);
+   for(const page of (res?.data??[]) as Array<Record<string,unknown>>)addPage(page);
+  }
+ }
+ return {ok:true,pages:[...pages.values()].sort((a,b)=>a.name.localeCompare(b.name))};
 }
 
 export async function generateCopies(input:{
