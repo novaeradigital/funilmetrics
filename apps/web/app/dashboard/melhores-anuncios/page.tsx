@@ -17,6 +17,12 @@ import {
   type BestAdSort,
 } from "../../../lib/melhores-anuncios";
 import {
+  intersectScope,
+  loadBusinessProjects,
+  loadBusinessScope,
+  resolveBusinessProjectId,
+} from "../../../lib/business-projects";
+import {
   MelhoresAnunciosClient,
   type BestAdViewRow,
 } from "./melhores-anuncios-client";
@@ -32,6 +38,7 @@ type PageProps = {
     account?: string | string[];
     sort?: string;
     min?: string;
+    projeto?: string;
   }>;
 };
 
@@ -59,7 +66,7 @@ function actionSum(actionType: string): string {
      where elem ->> 'action_type' = '${actionType}'), 0))::text`;
 }
 
-type AccountOption = { id: string; name: string };
+type AccountOption = { id: string; name: string; business_project_id: string | null };
 type UtmSales = { utm_content: string | null; sales: number; revenue: string };
 type AdInsights = {
   external_ad_id: string;
@@ -80,6 +87,7 @@ type AdName = {
   campaign_name: string | null;
   thumbnail_url: string | null;
   image_url: string | null;
+  account_id: string | null;
 };
 
 function selectedAccounts(raw: string | string[] | undefined, valid: Set<string>): string[] {
@@ -90,7 +98,18 @@ function selectedAccounts(raw: string | string[] | undefined, valid: Set<string>
   return parts.filter((id) => valid.has(id));
 }
 
-const sortKeys: BestAdSort[] = ["sales", "revenue", "roas", "profit"];
+const sortKeys: BestAdSort[] = [
+  "sales",
+  "revenue",
+  "roas",
+  "profit",
+  "quick",
+  "ctr",
+  "cpc",
+  "initiate",
+  "cost_per_initiate",
+  "clicks",
+];
 
 export default async function MelhoresAnunciosPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -130,12 +149,27 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
   try {
     const accounts = (
       await database.pool.query<AccountOption>(
-        `select id, name from public.meta_ad_accounts where project_id = $1 order by name`,
+        `select id, name, business_project_id::text as business_project_id
+           from public.meta_ad_accounts where project_id = $1 order by name`,
         [project.id],
       )
     ).rows;
+    const businessProjects = await loadBusinessProjects(database.pool, project.id).catch(
+      () => [],
+    );
+    const businessId = resolveBusinessProjectId(params.projeto, businessProjects);
+    const businessScope = businessId
+      ? await loadBusinessScope(database.pool, project.id, businessId).catch(() => null)
+      : null;
     const accountIds = selectedAccounts(params.account, new Set(accounts.map((a) => a.id)));
-    const accountFilter = accountIds.length ? accountIds : null;
+    const effectiveAccountIds = businessScope
+      ? intersectScope(accountIds, businessScope.accountIds)
+      : accountIds;
+    const accountFilter = businessScope
+      ? effectiveAccountIds
+      : accountIds.length
+        ? accountIds
+        : null;
     const accountNameById = new Map(accounts.map((a) => [a.id, a.name]));
 
     const utmSales = (
@@ -189,7 +223,8 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
     const adNames = (
       await database.pool.query<AdName>(
         `select ad.external_id, ad.name, campaign.name as campaign_name,
-           creative.thumbnail_url, creative.image_url
+           creative.thumbnail_url, creative.image_url,
+           ad.meta_ad_account_id::text as account_id
            from public.meta_ads ad
            left join public.meta_campaigns campaign on campaign.id = ad.meta_campaign_id
            left join public.meta_creatives creative on creative.id = ad.meta_creative_id
@@ -256,7 +291,14 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
       };
     });
 
-    const sorted = sortBestAds(rows, sort);
+    const scopedRows = businessScope
+      ? rows.filter((row) => {
+          const accountId =
+            insightsByAd.get(row.adId)?.account_id ?? nameByAd.get(row.adId)?.account_id ?? null;
+          return accountId !== null && businessScope.accountIds.includes(accountId);
+        })
+      : rows;
+    const sorted = sortBestAds(scopedRows, sort);
     const visible = sorted.filter((row) => row.spend >= minSpend || row.sales > 0);
 
     const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: project.currency });
@@ -265,18 +307,24 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
     content = (
       <div className="dashboard-main">
         <MelhoresAnunciosFilters
-          accounts={accounts}
+          accounts={accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            businessId: account.business_project_id,
+          }))}
+          businessProjects={businessProjects}
           initial={{
             from: range.from,
             to: range.to,
             preset: range.preset,
             sort,
             minSpend,
-            accountIds,
+            accountIds: effectiveAccountIds,
+            businessId,
           }}
         />
 
-        {rows.length === 0 ? (
+        {scopedRows.length === 0 ? (
           <section className="dashboard-card">
             <header className="card-header">
               <div>
@@ -294,7 +342,7 @@ export default async function MelhoresAnunciosPage({ searchParams }: PageProps) 
           <>
             <MelhoresAnunciosClient
               rows={visible}
-              totalAds={rows.length}
+              totalAds={scopedRows.length}
               currency={project.currency}
             />
             {organic.sales > 0 ? (

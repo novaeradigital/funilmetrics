@@ -2464,3 +2464,17 @@ Regras:
 - O limite de anuncios ativos por Pagina vem da API da Meta (volume de anuncios da Pagina: 250 na faixa inicial de gasto, depois 1.000, 5.000 e 20.000) e aparece no Gerenciador, no pre-voo da subida e na revisao, sempre com o valor que a API devolver.
 - A tela de Publicacoes guarda cada subida com status por campanha, conjunto e anuncio, erro legivel e retentativa seletiva do que falhou.
 - Ordem das levas: 1) fundacao (menu, escopo, configuracao de IA, modelos de dados); 2) assistente de subida com revisao; 3) publicacao no worker e tela de Publicacoes.
+
+## D-174: Projeto de negócio (camada de agrupamento para filtros)
+
+**Contexto.** Com duas operações rodando no mesmo projeto do sistema (Alivzon e Reapaixonar Marido), o Dashboard misturava os números: ao selecionar a conta da Bruna (Reapaixonar), apareciam vendas do Alivzon, porque a venda se liga à conexão de pagamento e ao produto, não à conta de anúncio. E o filtro de produto do Dashboard só listava produtos com venda registrada, então um projeto sem vendas não tinha o que selecionar.
+
+**Decisão.** Criar a camada "Projeto" (negócio) dentro do projeto atual, sem separar projetos de sistema (conexões, tokens, sincronizações, R2 e membros são por projeto; separar quebraria sincronizações e forçaria reconexões). Tabela `business_projects` e coluna `business_project_id` em `meta_ad_accounts`, `connections`, `commerce_products` e `creatives`. Conta e conexão valem o projeto direto; produto vale o próprio e, sem ele, herda o da conexão; criativo vale o próprio e herda o da conta quando é publicado nela ainda sem projeto. Gestão na tela Projetos (criar, renomear, excluir e associar contas, conexões e produtos, com contagem do que está sem projeto) e na Biblioteca (filtro por projeto e campo Projeto em cada cartão). Dashboard (v2) e Melhores Anúncios ganham o seletor de Projeto: com um negócio selecionado, mídia vem das contas dele, vendas dos produtos dele (produto cadastrado entra no filtro mesmo sem venda) e o padrão "Todos os projetos" preserva o comportamento anterior. Associar é rótulo de leitura: vale para o histórico e não move dados.
+
+**Divisão inicial aplicada.** Alivzon: contas Saoliveira 01 e Saoliveira 02, conexão ConfigCheckout e os criativos existentes fora da pasta do Reapaixonar. Reapaixonar Marido: conta Bruna Silva 01 e os criativos da pasta Reapaixonar Marido. Conexões Lastlink e contas Catarina Campos 01 e Longevidade.site ficaram sem projeto nesta leva.
+
+## D-175: Melhores Anúncios, ordenação por métricas secundárias e Leitura rápida
+
+**Contexto.** As ordenações do ranking eram só por resultado de venda (vendas, receita, ROAS, lucro). Projeto sem vendas não tinha leitura possível, embora a consulta já agregasse CTR, CPC e Initiate Checkout por anúncio.
+
+**Decisão.** O seletor "Ordenar por" ganha uma opção por métrica secundária: Leitura rápida, CTR, CPC (menor primeiro), Initiate Checkout, Custo por Initiate e Cliques no link. Nada de índice combinado escondido: cada métrica ordena sozinha, com sua direção, e anúncio sem a métrica vai para o fim da lista, nunca com zero fabricado (régua de docs/METRICAS.md). A Leitura rápida é uma cascata explícita: Initiate Checkout, depois CTR, depois CPC, depois investimento; é a leitura de "quem está prometendo" para projeto sem vendas.

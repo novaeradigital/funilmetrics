@@ -7,7 +7,24 @@ export type DashboardMetricSeries=Record<string,DashboardMetricPoint[]>;
 export type DashboardQueryFilters={productId?:string|null;productIds?:string[]|null;accountId?:string|null;accountIds?:string[]|null;campaignId?:string|null;
  from?:string|null;to?:string|null;timezone?:string|null;
  offerId?:string|null;source?:string|null;medium?:string|null;paymentMethod?:string|null;paymentStatus?:string|null;buyerSegment?:"new"|"recurring"|null;
- revenueBasis?:"producer_commission"|"sale_total"|null};
+ revenueBasis?:"producer_commission"|"sale_total"|null;
+ /** Escopo de projeto de negócio (D-174): quando presente (mesmo vazio),
+  * limita produtos e contas ao escopo, cruzando com a seleção do usuário. */
+ scopeProductIds?:string[]|null;scopeAccountIds?:string[]|null};
+
+function scopedSelection(selected:string[]|null,scope:string[]|null|undefined):string[]|null{
+ if(scope===null||scope===undefined)return selected;
+ if(selected===null)return [...scope];
+ const allowed=new Set(scope);return selected.filter(id=>allowed.has(id));
+}
+function resolveProductFilter(filters:DashboardQueryFilters):string[]|null{
+ const selected=filters.productIds?.length?filters.productIds:(filters.productId?[filters.productId]:null);
+ return scopedSelection(selected,filters.scopeProductIds);
+}
+function resolveAccountFilter(filters:DashboardQueryFilters):string[]|null{
+ const selected=filters.accountIds?.length?filters.accountIds:(filters.accountId?[filters.accountId]:null);
+ return scopedSelection(selected,filters.scopeAccountIds);
+}
 
 function commerceFilterSql(buyerSegment:DashboardQueryFilters["buyerSegment"]){return `
  and ($8::uuid is null or exists(select 1 from public.commerce_orders filtered_order where filtered_order.id=event.order_id and filtered_order.offer_id=$8))
@@ -20,7 +37,7 @@ function commerceFilterSql(buyerSegment:DashboardQueryFilters["buyerSegment"]){r
 export async function loadDashboardMetricValues(database:Database,projectId:string,periodDays:number,
  filters:DashboardQueryFilters={}){
  const revenueBasis=filters.revenueBasis==="sale_total"?"sale_total":"producer_commission";
- const accountFilter=filters.accountIds?.length?filters.accountIds:(filters.accountId?[filters.accountId]:null);
+ const accountFilter=resolveAccountFilter(filters);
 
  const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
  const financial=(await database.pool.query<{gross_revenue:string;net_revenue:string;
@@ -36,7 +53,7 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
    and (event.occurred_at at time zone $6)>=coalesce($4::date,(now() at time zone $6)-($2::integer*interval '1 day'))
    and (event.occurred_at at time zone $6)<coalesce($5::date+interval '1 day',(now() at time zone $6)+interval '1 day') and ($3::uuid[] is null or exists(
     select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($3)
-   ))${commerceFilterSql(filters.buyerSegment)}`,[projectId,periodDays,filters.productIds?.length?filters.productIds:(filters.productId?[filters.productId]:null),filters.from??null,filters.to??null,
+   ))${commerceFilterSql(filters.buyerSegment)}`,[projectId,periodDays,resolveProductFilter(filters),filters.from??null,filters.to??null,
     filters.timezone??"UTC",revenueBasis,filters.offerId??null,filters.source??null,filters.medium??null,filters.paymentMethod??null,filters.paymentStatus??null,filters.buyerSegment??null])).rows[0];
  const meta=(await database.pool.query<{spend:string;impressions:string;clicks:string;currency:string|null;
   rows:number;converted_rows:number;blocked_rows:number}>(
@@ -99,7 +116,7 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
 export async function loadDashboardMetricSeries(database:Database,projectId:string,periodDays:number,
  filters:DashboardQueryFilters={}){
  const revenueBasis=filters.revenueBasis==="sale_total"?"sale_total":"producer_commission";
- const accountFilter=filters.accountIds?.length?filters.accountIds:(filters.accountId?[filters.accountId]:null);
+ const accountFilter=resolveAccountFilter(filters);
 
  const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
  const financial=(await database.pool.query<{metric_day:string;gross_revenue:string;net_revenue:string;
@@ -114,7 +131,7 @@ export async function loadDashboardMetricSeries(database:Database,projectId:stri
    and (event.occurred_at at time zone $6)<coalesce($5::date+interval '1 day',(now() at time zone $6)+interval '1 day') and ($3::uuid[] is null or exists(
     select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($3)
    ))${commerceFilterSql(filters.buyerSegment)} group by date_trunc('day',event.occurred_at at time zone $6)
-   order by date_trunc('day',event.occurred_at at time zone $6)`,[projectId,periodDays,filters.productIds?.length?filters.productIds:(filters.productId?[filters.productId]:null),
+   order by date_trunc('day',event.occurred_at at time zone $6)`,[projectId,periodDays,resolveProductFilter(filters),
     filters.from??null,filters.to??null,filters.timezone??"UTC",revenueBasis,filters.offerId??null,filters.source??null,filters.medium??null,filters.paymentMethod??null,filters.paymentStatus??null,filters.buyerSegment??null])).rows;
  const meta=(await database.pool.query<{metric_day:string;spend:string;impressions:string;clicks:string}>(
   `select metric_date::text as metric_day,coalesce(sum(spend_base),0)::text spend,

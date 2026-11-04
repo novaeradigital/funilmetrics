@@ -131,6 +131,23 @@ export async function createUpload(formData:FormData){
    if(vid)(item.payload as Record<string,unknown>).metaVideoId=vid;
   }
  }catch{/* sem reuso, o publicador envia o video normalmente */}
+ // Heranca de projeto de negocio (D-174): criativo ainda sem projeto que
+ // vai ser publicado numa conta associada herda o projeto da conta.
+ try{
+  const extIds=[...new Set(config!.destinations.map(d=>d.accountExternalId))];
+  const accs=(await getDatabase().pool.query<{external_id:string;business_project_id:string|null}>(
+   `select external_id, business_project_id::text as business_project_id
+     from public.meta_ad_accounts
+    where project_id=$1 and external_id = any($2) and business_project_id is not null`,
+   [actor.projectId,extIds])).rows;
+  const creativeIds=config!.creatives.map(c=>c.id);
+  for(const acc of accs){
+   await getDatabase().pool.query(
+    `update public.creatives set business_project_id=$1, updated_at=now()
+      where project_id=$2 and id = any($3) and business_project_id is null`,
+    [acc.business_project_id,actor.projectId,creativeIds]);
+  }
+ }catch{/* heranca e automatica e opcional; nao bloqueia a subida */}
  const summary={
   accounts:config!.destinations.length,
   campaigns:items.filter(i=>i.level==="campaign").length,

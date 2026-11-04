@@ -19,6 +19,8 @@ import {
   deleteCreativeFolder,
   moveCreativeToFolder,
 } from "./folders-actions";
+import { moveCreativeToBusiness } from "./business-actions";
+import { loadBusinessProjects } from "../../../lib/business-projects";
 import { CreativeImportPanel } from "./creative-import-panel";
 import {getActiveProject} from "../../../lib/active-project";
 import {DashboardSidebar} from "../dashboard-sidebar";
@@ -77,6 +79,8 @@ type CreativeLibraryItem = {
   folder_name: string;
   creative_folder_id: string | null;
   creative_folder_name: string | null;
+  business_project_id: string | null;
+  business_project_name: string | null;
   total_count: string;
 };
 
@@ -150,6 +154,7 @@ type PageProps = {
   searchParams: Promise<{
     status?: string; q?: string; creative_status?: string;
     media_type?: string; folder?: string; cfolder?: string; page?: string;
+    projeto?: string;
   }>;
 };
 
@@ -162,6 +167,8 @@ export default async function CreativesPage({ searchParams }: PageProps) {
   const folderFilter=/^[0-9a-f-]{36}$/i.test(params.folder??"")?params.folder??"":"";
   const cfolderFilter=params.cfolder==="none"?"none"
     :/^[0-9a-f-]{36}$/i.test(params.cfolder??"")?params.cfolder??"":"";
+  const projetoFilter=params.projeto==="none"?"none"
+    :/^[0-9a-f-]{36}$/i.test(params.projeto??"")?params.projeto??"":"";
   const page=Math.max(1,Math.min(1000,Number(params.page)||1));
   const pageSize=24;
   const supabase = await createClient();
@@ -347,6 +354,9 @@ export default async function CreativesPage({ searchParams }: PageProps) {
       [summary.project_id],
     )
   ).rows;
+  const businessProjects = await loadBusinessProjects(database.pool, summary.project_id).catch(
+    () => [] as { id: string; name: string }[],
+  );
   const unfiledCount = (
     await database.pool.query<{ total: number }>(
       `select count(*)::int as total from public.creatives item
@@ -398,6 +408,7 @@ export default async function CreativesPage({ searchParams }: PageProps) {
     if (creativeStatus) query.set("creative_status", creativeStatus);
     if (mediaType) query.set("media_type", mediaType);
     if (folderFilter) query.set("folder", folderFilter);
+    if (projetoFilter) query.set("projeto", projetoFilter);
     if (target) query.set("cfolder", target);
     const suffix = query.toString();
     return suffix ? `/dashboard/criativos?${suffix}` : "/dashboard/criativos";
@@ -410,6 +421,8 @@ export default async function CreativesPage({ searchParams }: PageProps) {
               version.source_modified_at, coalesce(folder.name, '') as folder_name,
               creative.folder_id::text as creative_folder_id,
               cfolder.name as creative_folder_name,
+              creative.business_project_id::text as business_project_id,
+              business.name as business_project_name,
               count(*) over()::text total_count
          from public.creatives creative
          join public.creative_versions version
@@ -418,6 +431,7 @@ export default async function CreativesPage({ searchParams }: PageProps) {
          left join public.drive_files file on file.id = version.source_drive_file_id
          left join public.drive_folders folder on folder.id = file.drive_folder_id
          left join public.creative_folders cfolder on cfolder.id = creative.folder_id
+         left join public.business_projects business on business.id = creative.business_project_id
         where creative.project_id = $1
           and asset.malware_status = 'clean'
           and asset.available_at is not null
@@ -433,10 +447,13 @@ export default async function CreativesPage({ searchParams }: PageProps) {
           and ($8::text = '' or
             ($8 = 'none' and creative.folder_id is null) or
             creative.folder_id::text = $8)
+          and ($9::text = '' or
+            ($9 = 'none' and creative.business_project_id is null) or
+            creative.business_project_id::text = $9)
         order by creative.updated_at desc
         limit $6 offset $7`,
       [summary.project_id,search,creativeStatus,mediaType,folderFilter||null,
-       pageSize,(page-1)*pageSize,cfolderFilter],
+       pageSize,(page-1)*pageSize,cfolderFilter,projetoFilter],
     )
   ).rows;
   const totalLibrary=Number(library[0]?.total_count??0);
@@ -448,6 +465,7 @@ export default async function CreativesPage({ searchParams }: PageProps) {
     if(mediaType)query.set("media_type",mediaType);
     if(folderFilter)query.set("folder",folderFilter);
     if(cfolderFilter)query.set("cfolder",cfolderFilter);
+    if(projetoFilter)query.set("projeto",projetoFilter);
     query.set("page",String(target));
     return `/dashboard/criativos?${query.toString()}`;
   };
@@ -482,6 +500,8 @@ export default async function CreativesPage({ searchParams }: PageProps) {
           {params.status === "folder-renamed" ? <div className="notice notice-success">Pasta renomeada.</div> : null}
           {params.status === "folder-deleted" ? <div className="notice notice-success">Pasta excluída. Os criativos dela voltaram para Sem pasta.</div> : null}
           {params.status === "creative-moved" ? <div className="notice notice-success">Criativo movido.</div> : null}
+          {params.status === "creative-business" ? <div className="notice notice-success">Projeto do criativo atualizado.</div> : null}
+          {params.status === "business-invalid" ? <div className="notice notice-error">Projeto inválido para este criativo.</div> : null}
           {params.status === "folder-duplicate" ? <div className="notice notice-error">Já existe uma pasta com esse nome neste projeto.</div> : null}
           {params.status === "folder-invalid" ? <div className="notice notice-error">Informe um nome de pasta válido.</div> : null}
           {oauthConfigurationInvalid ? <div className="notice notice-error">A configuração OAuth do servidor está incompleta ou inválida.</div> : null}
@@ -786,8 +806,13 @@ export default async function CreativesPage({ searchParams }: PageProps) {
                   <option value="none">Sem pasta</option>
                   {creativeFolders.map((folder)=><option key={folder.id} value={folder.id}>{folder.name}</option>)}
                 </select></label>
+                <label>Projeto<select defaultValue={projetoFilter} name="projeto">
+                  <option value="">Todos</option>
+                  <option value="none">Sem projeto</option>
+                  {businessProjects.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}
+                </select></label>
                 <button type="submit">Filtrar</button>
-                {(search||creativeStatus||mediaType||folderFilter||cfolderFilter)?<Link className="secondary-button" href="/dashboard/criativos">Limpar</Link>:null}
+                {(search||creativeStatus||mediaType||folderFilter||cfolderFilter||projetoFilter)?<Link className="secondary-button" href="/dashboard/criativos">Limpar</Link>:null}
               </form>
               {!previewConfigured ? (
                 <div className="notice notice-error">
@@ -836,6 +861,7 @@ export default async function CreativesPage({ searchParams }: PageProps) {
                         </div>
                         <h3>{creative.name}</h3>
                         {creative.folder_name ? <p>{creative.folder_name}</p> : null}
+                        <p>{creative.business_project_name ? `Projeto: ${creative.business_project_name}` : "Sem projeto"}</p>
                         <form action={moveCreativeToFolder} className="creative-move-form">
                           <input name="creative_id" type="hidden" value={creative.id} />
                           <input name="project_id" type="hidden" value={summary.project_id} />
@@ -843,6 +869,17 @@ export default async function CreativesPage({ searchParams }: PageProps) {
                             <select defaultValue={creative.creative_folder_id ?? ""} name="folder_id">
                               <option value="">Sem pasta</option>
                               {creativeFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+                            </select>
+                          </label>
+                          <button type="submit">Mover</button>
+                        </form>
+                        <form action={moveCreativeToBusiness} className="creative-move-form">
+                          <input name="creative_id" type="hidden" value={creative.id} />
+                          <input name="project_id" type="hidden" value={summary.project_id} />
+                          <label>Projeto
+                            <select defaultValue={creative.business_project_id ?? ""} name="business_project_id">
+                              <option value="">Sem projeto</option>
+                              {businessProjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                             </select>
                           </label>
                           <button type="submit">Mover</button>

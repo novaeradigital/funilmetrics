@@ -134,9 +134,55 @@ export type BestAdRow = {
   spend: number;
   roas: number | null;
   profit: number;
+  /** Métricas secundárias (D-175): null quando indisponível, nunca zero. */
+  ctr?: number | null;
+  cpc?: number | null;
+  checkouts?: number;
+  linkClicks?: number;
 };
 
-export type BestAdSort = "sales" | "revenue" | "roas" | "profit";
+export type BestAdSort =
+  | "sales"
+  | "revenue"
+  | "roas"
+  | "profit"
+  | "quick"
+  | "ctr"
+  | "cpc"
+  | "initiate"
+  | "cost_per_initiate"
+  | "clicks";
+
+/** Custo por Initiate Checkout; sem initiate, indisponível (null). */
+export function costPerInitiate(row: BestAdRow): number | null {
+  const checkouts = row.checkouts ?? 0;
+  if (checkouts <= 0) return null;
+  return row.spend / checkouts;
+}
+
+/** Maior primeiro, com indisponível (null) sempre no fim. */
+function descNullLast(value: (row: BestAdRow) => number | null) {
+  return (a: BestAdRow, b: BestAdRow) => {
+    const av = value(a);
+    const bv = value(b);
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return bv - av;
+  };
+}
+
+/** Menor primeiro, com indisponível (null) sempre no fim. */
+function ascNullLast(value: (row: BestAdRow) => number | null) {
+  return (a: BestAdRow, b: BestAdRow) => {
+    const av = value(a);
+    const bv = value(b);
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return av - bv;
+  };
+}
 
 /** Ordena o ranking; desempate por receita e gasto, nesta ordem. */
 export function sortBestAds<T extends BestAdRow>(rows: T[], sort: BestAdSort): T[] {
@@ -151,6 +197,32 @@ export function sortBestAds<T extends BestAdRow>(rows: T[], sort: BestAdSort): T
       break;
     case "profit":
       sorted.sort((a, b) => b.profit - a.profit || bySpend(a, b));
+      break;
+    case "quick":
+      // Leitura rápida (D-175): quem chegou mais perto de comprar, depois
+      // quem chama mais atenção, depois quem clica mais barato.
+      sorted.sort(
+        (a, b) =>
+          (b.checkouts ?? 0) - (a.checkouts ?? 0) ||
+          descNullLast((row) => row.ctr ?? null)(a, b) ||
+          ascNullLast((row) => row.cpc ?? null)(a, b) ||
+          bySpend(a, b),
+      );
+      break;
+    case "ctr":
+      sorted.sort((a, b) => descNullLast((row) => row.ctr ?? null)(a, b) || bySpend(a, b));
+      break;
+    case "cpc":
+      sorted.sort((a, b) => ascNullLast((row) => row.cpc ?? null)(a, b) || bySpend(a, b));
+      break;
+    case "initiate":
+      sorted.sort((a, b) => (b.checkouts ?? 0) - (a.checkouts ?? 0) || bySpend(a, b));
+      break;
+    case "cost_per_initiate":
+      sorted.sort((a, b) => ascNullLast(costPerInitiate)(a, b) || bySpend(a, b));
+      break;
+    case "clicks":
+      sorted.sort((a, b) => (b.linkClicks ?? 0) - (a.linkClicks ?? 0) || bySpend(a, b));
       break;
     default:
       sorted.sort((a, b) => b.sales - a.sales || b.revenue - a.revenue || bySpend(a, b));

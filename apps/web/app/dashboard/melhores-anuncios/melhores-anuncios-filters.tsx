@@ -16,16 +16,28 @@ export type FiltersInitial = {
   sort: BestAdSort;
   minSpend: number;
   accountIds: string[];
+  businessId: string | null;
 };
 
-type AccountOption = { id: string; name: string };
-type Props = { accounts: AccountOption[]; initial: FiltersInitial };
+type AccountOption = { id: string; name: string; businessId: string | null };
+type BusinessOption = { id: string; name: string };
+type Props = {
+  accounts: AccountOption[];
+  businessProjects: BusinessOption[];
+  initial: FiltersInitial;
+};
 
 const sortOptions: { key: BestAdSort; label: string }[] = [
   { key: "sales", label: "Vendas" },
   { key: "revenue", label: "Receita" },
   { key: "roas", label: "ROAS" },
   { key: "profit", label: "Lucro" },
+  { key: "quick", label: "Leitura rápida" },
+  { key: "ctr", label: "CTR" },
+  { key: "cpc", label: "CPC (menor primeiro)" },
+  { key: "initiate", label: "Initiate Checkout" },
+  { key: "cost_per_initiate", label: "Custo por Initiate" },
+  { key: "clicks", label: "Cliques no link" },
 ];
 
 const presetOptions: { key: Exclude<PeriodPreset, "custom">; label: string }[] = [
@@ -125,13 +137,28 @@ function CalendarIcon() {
   );
 }
 
-export function MelhoresAnunciosFilters({ accounts, initial }: Props) {
+export function MelhoresAnunciosFilters({ accounts, businessProjects, initial }: Props) {
   const router = useRouter();
   const barRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState<"filters" | "date" | null>(null);
   const [sort, setSort] = useState<BestAdSort>(initial.sort);
   const [minSpend, setMinSpend] = useState(String(initial.minSpend));
   const [accountIds, setAccountIds] = useState<string[]>(initial.accountIds);
+  const [businessId, setBusinessId] = useState<string>(initial.businessId ?? "");
+  const accountBusiness = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account.businessId])),
+    [accounts],
+  );
+  const visibleAccounts = businessId
+    ? accounts.filter((account) => account.businessId === businessId)
+    : accounts;
+
+  function chooseBusiness(next: string) {
+    setBusinessId(next);
+    if (next) {
+      setAccountIds((current) => current.filter((id) => accountBusiness.get(id) === next));
+    }
+  }
   const [preset, setPreset] = useState<PeriodPreset>(initial.preset);
   const [from, setFrom] = useState<string | null>(initial.from);
   const [to, setTo] = useState<string | null>(initial.to);
@@ -204,6 +231,7 @@ export function MelhoresAnunciosFilters({ accounts, initial }: Props) {
     const min = Number(minSpend.replace(",", "."));
     if (Number.isFinite(min) && min >= 0 && min !== 50) params.set("min", String(min));
     if (accountIds.length) params.set("account", accountIds.join(","));
+    if (businessId) params.set("projeto", businessId);
     const query = params.toString();
     router.push(query ? `/dashboard/melhores-anuncios?${query}` : "/dashboard/melhores-anuncios", {
       scroll: false,
@@ -255,6 +283,22 @@ export function MelhoresAnunciosFilters({ accounts, initial }: Props) {
   return (
     <div className="ma-filterbar" ref={barRef}>
       <label className="ma-pill ma-pill-field">
+        <span>Projeto</span>
+        <select
+          value={businessId}
+          onChange={(event) => chooseBusiness(event.target.value)}
+          aria-label="Projeto de negócio"
+        >
+          <option value="">Todos os projetos</option>
+          {businessProjects.map((business) => (
+            <option key={business.id} value={business.id}>
+              {business.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="ma-pill ma-pill-field">
         <span>Ordenar por</span>
         <select value={sort} onChange={(event) => setSort(event.target.value as BestAdSort)}>
           {sortOptions.map((option) => (
@@ -293,7 +337,7 @@ export function MelhoresAnunciosFilters({ accounts, initial }: Props) {
         {open === "filters" ? (
           <div className="ma-pop ma-pop-accounts">
             <strong>Contas de anúncios</strong>
-            {accounts.map((account) => (
+            {visibleAccounts.map((account) => (
               <label key={account.id}>
                 <input
                   type="checkbox"
@@ -303,7 +347,11 @@ export function MelhoresAnunciosFilters({ accounts, initial }: Props) {
                 {account.name}
               </label>
             ))}
-            <small>Nenhuma marcada mostra todas as contas.</small>
+            <small>
+              {businessId
+                ? "Mostrando só as contas do projeto selecionado."
+                : "Nenhuma marcada mostra todas as contas."}
+            </small>
           </div>
         ) : null}
       </div>

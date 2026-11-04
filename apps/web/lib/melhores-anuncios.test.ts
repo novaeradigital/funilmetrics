@@ -126,3 +126,38 @@ describe("sortBestAds", () => {
     expect(rows).toEqual(original);
   });
 });
+
+describe("sortBestAds métricas secundárias (D-175)", () => {
+  const rows: BestAdRow[] = [
+    { adId: "a", sales: 0, revenue: 0, spend: 100, roas: null, profit: -100, ctr: 2, cpc: 1, checkouts: 4, linkClicks: 100 },
+    { adId: "b", sales: 0, revenue: 0, spend: 200, roas: null, profit: -200, ctr: 5, cpc: 0.5, checkouts: 4, linkClicks: 400 },
+    { adId: "c", sales: 0, revenue: 0, spend: 50, roas: null, profit: -50, ctr: null, cpc: null, checkouts: 0, linkClicks: 0 },
+    { adId: "d", sales: 0, revenue: 0, spend: 80, roas: null, profit: -80, ctr: 1, cpc: 2, checkouts: 9, linkClicks: 40 },
+  ];
+
+  it("CTR ordena do maior pro menor e manda indisponível pro fim", () => {
+    expect(sortBestAds(rows, "ctr").map((row) => row.adId)).toEqual(["b", "a", "d", "c"]);
+  });
+
+  it("CPC ordena do menor pro maior e manda indisponível pro fim", () => {
+    expect(sortBestAds(rows, "cpc").map((row) => row.adId)).toEqual(["b", "a", "d", "c"]);
+  });
+
+  it("Initiate ordena por quantidade de checkouts iniciados", () => {
+    expect(sortBestAds(rows, "initiate").map((row) => row.adId)).toEqual(["d", "b", "a", "c"]);
+  });
+
+  it("Custo por Initiate ordena do menor pro maior e sem initiate vai pro fim", () => {
+    // d: 80/9 = 8,9; a: 100/4 = 25; b: 200/4 = 50; c: sem initiate.
+    expect(sortBestAds(rows, "cost_per_initiate").map((row) => row.adId)).toEqual(["d", "a", "b", "c"]);
+  });
+
+  it("Cliques ordena por cliques no link", () => {
+    expect(sortBestAds(rows, "clicks").map((row) => row.adId)).toEqual(["b", "a", "d", "c"]);
+  });
+
+  it("Leitura rápida: initiate, depois CTR, depois CPC, depois gasto", () => {
+    // d tem mais initiates (9); entre a e b (4), b tem CTR maior.
+    expect(sortBestAds(rows, "quick").map((row) => row.adId)).toEqual(["d", "b", "a", "c"]);
+  });
+});
