@@ -8,6 +8,7 @@ import { loadR2StorageConfig } from "./r2-storage.js";
 import { loadClamAvConfig } from "./clamav-scanner.js";
 import { processGoogleDriveInventory } from "./google-drive-inventory.js";
 import { processGoogleDriveImport } from "./google-drive-import.js";
+import { processCreativeImports } from "./creative-import.js";
 import { processCreativeTranscription } from "./creative-transcription.js";
 import { processCreativeAnalysis } from "./creative-analysis.js";
 import { processCampaignUploads } from "./campaign-publisher.js";
@@ -153,6 +154,12 @@ export async function runWorker(signal: AbortSignal) {
         if (driveImport.claimed > 0) {
           process.stdout.write(
             `${JSON.stringify({ event: "drive_import_processed", ...driveImport })}\n`,
+          );
+        }
+        const creativeImport = await processCreativeImports(database.pool);
+        if (creativeImport.claimed > 0) {
+          process.stdout.write(
+            `${JSON.stringify({ event: "creative_import_processed", ...creativeImport })}\n`,
           );
         }
         const transcription = await processCreativeTranscription(

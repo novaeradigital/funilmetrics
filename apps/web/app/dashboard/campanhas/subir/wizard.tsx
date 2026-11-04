@@ -2,6 +2,8 @@
 import {useMemo,useState,useTransition} from "react";
 import {createUpload,saveTemplate,generateCopies,getDestinationPages,getDestinationPixels,type DestinationPage,type DestinationPixel} from "./actions";
 import {expandStructure,resolveNamingPattern,buildUtmQuery,type NamingContext} from "../../../../lib/campaign-naming";
+import {CreativeImportPanel} from "../../criativos/creative-import-panel";
+import {useRouter} from "next/navigation";
 
 export type WizardAccount={id:string;externalId:string;name:string;currency:string|null};
 export type WizardCreative={id:string;name:string;format:string;mimeType:string;transcript:string|null;folderId:string|null;folderName:string|null};
@@ -39,6 +41,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
  const [pixelsByAccount,setPixelsByAccount]=useState<Record<string,PixelsState>>({});
  const [pending,startTransition]=useTransition();
 
+ const router=useRouter();
  const creativeById=useMemo(()=>new Map(creatives.map(c=>[c.id,c])),[creatives]);
  const visibleCreatives=useMemo(()=>creatives.filter(c=>
   (!creativeFolder||(creativeFolder==="none"?!c.folderId:c.folderId===creativeFolder))
@@ -244,7 +247,12 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
 
   {step===2&&<section className="dashboard-card">
    <h2>Criativos da Biblioteca</h2>
-   <p>Upload manual e link de pasta do Drive entram pela Biblioteca (grupo Criativos). Aqui voce escolhe os criativos prontos.</p>
+   <p>Escolha os criativos prontos da Biblioteca ou envie arquivos novos aqui mesmo. Depois do processamento (antivirus), clique em Atualizar lista para eles aparecerem.</p>
+   <div style={{border:"1px dashed #ccc",borderRadius:8,padding:12,margin:"10px 0"}}>
+    <strong>Enviar arquivos agora</strong>
+    <CreativeImportPanel folders={folders}/>
+    <button type="button" className="secondary-button" onClick={()=>router.refresh()}>Atualizar lista</button>
+   </div>
    <label>Produto<input list="wizard-products" value={productName} onChange={e=>setProductName(e.target.value)}/></label>
    <datalist id="wizard-products">{products.map(p=><option key={p} value={p}/>)}</datalist>
    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",margin:"10px 0"}}>

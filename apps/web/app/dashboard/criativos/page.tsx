@@ -19,6 +19,7 @@ import {
   deleteCreativeFolder,
   moveCreativeToFolder,
 } from "./folders-actions";
+import { CreativeImportPanel } from "./creative-import-panel";
 import {getActiveProject} from "../../../lib/active-project";
 import {DashboardSidebar} from "../dashboard-sidebar";
 import {DashboardTopbar} from "../dashboard-topbar";
@@ -83,6 +84,38 @@ type CreativeFolderRow = {
   id: string;
   name: string;
   total: number;
+};
+
+type CreativeImportJobRow = {
+  id: string;
+  source: string;
+  status: string;
+  created_at: Date;
+  total: number;
+  imported: number;
+  skipped: number;
+  failed: number;
+  active: number;
+};
+
+type CreativeImportFailureRow = {
+  display_name: string;
+  error_code: string | null;
+};
+
+const creativeImportErrorMessages: Record<string, string> = {
+  unsupported_format:
+    "Formato nao suportado. Envie video (MP4, MOV ou WebM), imagem, PDF ou texto.",
+  file_size_limit_exceeded: "Arquivo acima do limite permitido para o formato.",
+  upload_size_limit_exceeded:
+    "Arquivo acima de 200 MB no envio direto. Use o link do Drive para arquivos maiores.",
+  malware_detected: "O antivirus reprovou o arquivo e ele foi descartado.",
+  malware_scan_unsupported: "O antivirus nao conseguiu analisar o arquivo.",
+  checksum_mismatch: "O arquivo chegou diferente do enviado. Envie novamente.",
+  drive_link_not_public:
+    "O link nao esta publico. No Drive, ative o compartilhamento para qualquer pessoa com o link e tente de novo.",
+  drive_download_failed: "Nao foi possivel baixar o arquivo do Drive.",
+  empty_file: "O arquivo esta vazio.",
 };
 
 const driveOAuthErrorMessages: Record<string, string> = {
@@ -327,6 +360,38 @@ export default async function CreativesPage({ searchParams }: PageProps) {
       [summary.project_id],
     )
   ).rows[0]?.total ?? 0;
+  const recentImports = (
+    await database.pool.query<CreativeImportJobRow>(
+      `select job.id::text, job.source, job.status, job.created_at,
+              count(item.id)::int as total,
+              count(item.id) filter (where item.status = 'imported')::int as imported,
+              count(item.id) filter (where item.status = 'skipped_unchanged')::int as skipped,
+              count(item.id) filter (
+                where item.status in ('failed_terminal', 'rejected_format', 'rejected_size')
+              )::int as failed,
+              count(item.id) filter (
+                where item.status in ('pending', 'downloading', 'scanning', 'failed_retryable')
+              )::int as active
+         from public.creative_import_jobs job
+         left join public.creative_import_items item on item.job_id = job.id
+        where job.project_id = $1
+        group by job.id
+        order by job.created_at desc
+        limit 5`,
+      [summary.project_id],
+    )
+  ).rows;
+  const recentImportFailures = (
+    await database.pool.query<CreativeImportFailureRow>(
+      `select item.display_name, item.error_code
+         from public.creative_import_items item
+        where item.project_id = $1
+          and item.status in ('failed_terminal', 'rejected_format', 'rejected_size')
+        order by item.updated_at desc
+        limit 5`,
+      [summary.project_id],
+    )
+  ).rows;
   const cfolderHref = (target: string) => {
     const query = new URLSearchParams();
     if (search) query.set("q", search);
@@ -606,6 +671,46 @@ export default async function CreativesPage({ searchParams }: PageProps) {
               </Link>
             ) : null}
           </details>
+
+          <section className="creative-imports">
+            <div className="section-heading">
+              <div>
+                <p className="panel-label">Adicionar criativos</p>
+                <h2>Upload manual</h2>
+              </div>
+            </div>
+            <p>Envie arquivos direto do computador. Eles passam por quarentena e antivirus e entram na pasta escolhida quando o processamento termina.</p>
+            <CreativeImportPanel folders={creativeFolders} />
+            {recentImports.length ? (
+              <ul className="creative-import-jobs">
+                {recentImports.map((job) => (
+                  <li key={job.id}>
+                    <strong>{job.source === "upload" ? "Upload manual" : "Link do Drive"}</strong>
+                    {" · "}
+                    {job.created_at.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                    {" · "}
+                    {job.status === "processing"
+                      ? "processando"
+                      : job.status === "completed_with_errors"
+                        ? "concluida com erros"
+                        : "concluida"}
+                    {`: ${job.imported} importado(s), ${job.skipped} ja existia(m), ${job.failed} com erro, ${job.active} em andamento`}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {recentImportFailures.length ? (
+              <div className="notice notice-error">
+                {recentImportFailures.map((failure, index) => (
+                  <p key={index}>
+                    {failure.display_name}:{" "}
+                    {creativeImportErrorMessages[failure.error_code ?? ""] ??
+                      "Nao foi possivel importar este arquivo."}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+          </section>
 
           {summary.creatives ? (
             <>

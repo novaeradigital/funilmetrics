@@ -151,6 +151,17 @@ export class R2CreativeStorage {
     return response.Body;
   }
 
+  async getQuarantineObject(key: string) {
+    if (!key.startsWith("quarantine/")) {
+      throw new Error("quarantine_key_invalid");
+    }
+    const response = (await this.client.send(
+      new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+    )) as { Body?: NodeJS.ReadableStream };
+    if (!response.Body) throw new Error("quarantine_object_body_missing");
+    return response.Body;
+  }
+
   async promoteCleanObject(input: {
     quarantineKey: string;
     organizationId: string;
