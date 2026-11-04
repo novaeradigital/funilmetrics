@@ -10,6 +10,7 @@ export type WizardCreative={id:string;name:string;format:string;mimeType:string;
 export type WizardFolder={id:string;name:string};
 export type WizardTemplate={id:string;name:string;config:Record<string,unknown>};
 type CopyModel={primaryText:string;headline:string;cta:string};
+const CTA_OPTIONS=["Saiba mais","Comprar agora","Cadastre-se","Quero começar","Entre em contato","Baixar agora"];
 type DestinationState={pageId:string;instagramId:string;pixelId:string;event:string};
 type PagesState={loading:boolean;error?:string;pages:DestinationPage[]};
 type PixelsState={loading:boolean;error?:string;pixels:DestinationPixel[]};
@@ -159,8 +160,8 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
   setCopyError("");
   startTransition(async()=>{
    const items=copyMode==="global"
-    ? [{creativeId:"__global",name:selectedCreativeObjs[0]?.name??"geral",transcript:selectedCreativeObjs[0]?.transcript??null}]
-    : selectedCreativeObjs.map(c=>({creativeId:c.id,name:c.name,transcript:c.transcript}));
+    ? [{creativeId:selectedCreativeObjs[0]?.id??"__global",key:"__global",name:selectedCreativeObjs[0]?.name??"geral",transcript:selectedCreativeObjs[0]?.transcript??null}]
+    : selectedCreativeObjs.map(c=>({creativeId:c.id,key:c.id,name:c.name,transcript:c.transcript}));
    const result=await generateCopies({productName,items});
    if(!result.ok){setCopyError(result.error??"Falha na geracao.");return;}
    setGenerated(result.copies??{});
@@ -187,8 +188,11 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
      onChange={e=>setEdited(p=>({...p,[scopeKey]:{...current,primaryText:e.target.value}}))}/></label>
     <label style={{display:"block"}}>Titulo<input style={{width:"100%"}} value={current.headline}
      onChange={e=>setEdited(p=>({...p,[scopeKey]:{...current,headline:e.target.value}}))}/></label>
-    <label style={{display:"block"}}>Botao (CTA)<input style={{width:"100%"}} value={current.cta}
-     onChange={e=>setEdited(p=>({...p,[scopeKey]:{...current,cta:e.target.value}}))}/></label>
+    <label style={{display:"block"}}>Botao (CTA)<select style={{width:"100%"}} value={current.cta}
+     onChange={e=>setEdited(p=>({...p,[scopeKey]:{...current,cta:e.target.value}}))}>
+     {(CTA_OPTIONS.includes(current.cta)?CTA_OPTIONS:[current.cta,...CTA_OPTIONS]).map(option=>
+      <option key={option} value={option}>{option}</option>)}
+    </select></label>
    </>:null}
   </fieldset>;
  }

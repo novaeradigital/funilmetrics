@@ -183,7 +183,12 @@ async function loadProvider(projectId:string,provider:"openai"|"anthropic"|"open
  return {apiKey,model,configuration:stored.configuration};
 }
 
-const copyInstruction="Voce escreve copy de anuncio em portugues do Brasil para o produto informado. Use a transcricao do criativo como base, sem inventar promessas nem resultados. Gere exatamente 3 modelos diferentes de copy. Responda somente com um JSON valido no formato {\"copies\":[{\"primaryText\":\"...\",\"headline\":\"...\",\"cta\":\"...\"}]}. cta curto, por exemplo: Saiba mais, Comprar agora, Quero comecar.";
+const CTA_OPTIONS=["Saiba mais","Comprar agora","Cadastre-se","Quero começar","Entre em contato","Baixar agora"];
+function normalizeCta(value:unknown):string{
+ const text=typeof value==="string"?value.trim().toLowerCase():"";
+ const found=CTA_OPTIONS.find(option=>option.toLowerCase()===text);
+ return found??"Saiba mais";}
+const copyInstruction="Voce escreve copy de anuncio em portugues do Brasil. A base da copy e o VIDEO do criativo: use a analise e a transcricao do video para criar o texto principal e o titulo, falando do que o video mostra, demonstra e promete. O nome do produto e apenas o contexto da oferta; nao invente promessas, resultados nem caracteristicas que nao estejam na analise ou na transcricao. Gere exatamente 3 modelos diferentes de copy. O campo cta deve ser exatamente um destes botoes padrao do Facebook, escolhido pelo sentido da copy: Saiba mais, Comprar agora, Cadastre-se, Quero começar, Entre em contato, Baixar agora. Responda somente com um JSON valido no formato {\"copies\":[{\"primaryText\":\"...\",\"headline\":\"...\",\"cta\":\"...\"}]}.";
 
 async function callOpenAi(apiKey:string,model:string,prompt:string):Promise<CopyModel[]>{
  const response=await fetch("https://api.openai.com/v1/responses",{method:"POST",
@@ -286,9 +291,66 @@ export async function getDestinationPixels(accountExternalId:string):Promise<{ok
  return {ok:true,pixels};
 }
 
+function formatAnalysis(analysis:Record<string,unknown>):string{
+ const labels:Record<string,string>={hook:"Gancho",promise:"Promessa",mechanism:"Mecanismo",proof:"Prova",objections:"Objecoes",cta:"CTA do video",structure:"Estrutura",evidence:"Evidencias"};
+ const lines:string[]=[];
+ for(const [key,label] of Object.entries(labels)){
+  const value=analysis[key];
+  if(value===null||value===undefined)continue;
+  const text=typeof value==="string"?value:JSON.stringify(value);
+  if(text&&text!=="{}"&&text!=="[]")lines.push(label+": "+text);
+ }
+ return lines.join("\n");
+}
+
+async function enqueueCreativeAiJobs(db:ReturnType<typeof getDatabase>,actor:Actor,creativeIds:string[]){
+ const cfg=(await db.pool.query<{transcriptionModel:string|null;analysisModel:string|null}>(
+  `select configuration->>'transcriptionModel' as "transcriptionModel",
+          configuration->>'analysisModel' as "analysisModel"
+     from public.connections
+    where project_id=$1 and provider='openai' and status='active'
+    order by created_at desc limit 1`,[actor.projectId])).rows[0];
+ const promptVersion="creative-analysis-v2-performance-aware";
+ for(const creativeId of creativeIds){
+  const scope=(await db.pool.query<{versionId:string;sha:string;mime:string;malware:string;available:Date|null}>(
+   `select v.id::text as "versionId", v.content_sha256 as sha,
+           a.mime_type as mime, a.malware_status::text as malware,
+           a.available_at as available
+      from public.creatives c
+      join public.creative_versions v on v.id=c.current_version_id
+      join public.creative_assets a on a.id=v.asset_id
+     where c.id=$1 and c.project_id=$2`,[creativeId,actor.projectId])).rows[0];
+  if(!scope)continue;
+  if(cfg?.transcriptionModel&&scope.mime.startsWith("video/")&&scope.malware==="clean"&&scope.available){
+   await db.pool.query(
+    `insert into public.creative_ai_jobs (organization_id,project_id,creative_id,creative_version_id,kind,status,idempotency_key,model,requested_by_user_id)
+     values ($1,$2,$3,$4,'transcription','pending',$5,$6,$7)
+     on conflict (creative_version_id,kind,idempotency_key) do nothing`,
+    [actor.organizationId,actor.projectId,creativeId,scope.versionId,
+     "transcription:v1:"+scope.sha+":"+cfg.transcriptionModel,cfg.transcriptionModel,actor.userId]);
+  }
+  if(cfg?.analysisModel){
+   const fp=(await db.pool.query<{fp:string}>(
+    `select coalesce((select md5(concat(max(insight.metric_date)::text,':',
+       sum(insight.spend_base) filter(where insight.conversion_status in ('converted','not_required'))::text,':',
+       sum(insight.impressions)::text,':',sum(insight.clicks)::text))
+        from public.creative_ad_links link
+        join public.meta_ad_insights_daily insight on insight.meta_ad_id=link.meta_ad_id
+       where link.creative_version_id=$1),'none') as fp`,[scope.versionId])).rows[0]?.fp??"none";
+   await db.pool.query(
+    `insert into public.creative_ai_jobs (organization_id,project_id,creative_id,creative_version_id,kind,status,idempotency_key,model,prompt_version,requested_by_user_id)
+     values ($1,$2,$3,$4,'analysis','pending',$5,$6,$7,$8)
+     on conflict (creative_version_id,kind,idempotency_key) do nothing`,
+    [actor.organizationId,actor.projectId,creativeId,scope.versionId,
+     "analysis:"+promptVersion+":"+scope.sha+":"+cfg.analysisModel+":"+fp,
+     cfg.analysisModel,promptVersion,actor.userId]);
+  }
+ }
+}
+
 export async function generateCopies(input:{
  productName:string;
- items:Array<{creativeId:string;name:string;transcript:string|null}>;
+ items:Array<{creativeId:string;key?:string;name:string;transcript:string|null}>;
 }):Promise<{ok:boolean;error?:string;copies?:Record<string,CopyModel[]>}>{
  const actor=await requireEditor();
  type AiProviderName="openai"|"anthropic"|"openrouter";
@@ -303,16 +365,48 @@ export async function generateCopies(input:{
   which==="anthropic"?callAnthropic(cfg.apiKey,cfg.model,prompt)
   :which==="openrouter"?callOpenRouter(cfg.apiKey,cfg.model,prompt)
   :callOpenAi(cfg.apiKey,cfg.model,prompt);
+ const db=getDatabase();
+ const ids=input.items.map(i=>i.creativeId).filter(id=>id!=="__global");
+ type BaseRow={id:string;transcript:string|null;analysis:Record<string,unknown>|null};
+ const baseRows=ids.length?(await db.pool.query<BaseRow>(
+  `select c.id::text as id,
+          (select t.text from public.creative_transcripts t
+            where t.creative_version_id=c.current_version_id
+            order by t.created_at desc limit 1) as transcript,
+          (select to_jsonb(a) from (select hook,promise,mechanism,proof,objections,cta,structure,evidence
+             from public.creative_analyses
+            where creative_version_id=c.current_version_id
+            order by created_at desc limit 1) a) as analysis
+     from public.creatives c
+    where c.project_id=$1 and c.id=any($2::uuid[])`,
+  [actor.projectId,ids])).rows:[];
+ const baseById=new Map(baseRows.map(r=>[r.id,r]));
+ const missing=input.items.filter(item=>{
+  if(item.creativeId==="__global")return false;
+  const base=baseById.get(item.creativeId);
+  const transcript=(base?.transcript??item.transcript??"").trim();
+  return !transcript&&!base?.analysis;});
+ if(missing.length){
+  await enqueueCreativeAiJobs(db,actor,missing.map(m=>m.creativeId));
+  const names=missing.map(m=>m.name).join(", ");
+  return {ok:false,error:"Os criativos "+names+" ainda nao tem transcricao nem analise do video, e sem isso a copy sai generica. Ja pedi a transcricao e a analise deles agora; aguarde alguns minutos e gere as copys de novo."};
+ }
  const out:Record<string,CopyModel[]>={};
  try{
   for(const item of input.items.slice(0,50)){
-   const prompt=`Produto: ${input.productName||"nao informado"}\nCriativo: ${item.name}\nTranscricao:\n${(item.transcript??"").slice(0,20000)||"(sem transcricao; use o nome do criativo e o produto)"}`;
+   const base=baseById.get(item.creativeId);
+   const transcriptText=(base?.transcript??item.transcript??"").slice(0,20000);
+   const analysisText=base?.analysis?formatAnalysis(base.analysis):"";
+   const prompt="Produto (contexto da oferta): "+(input.productName||"nao informado")
+    +"\nCriativo: "+item.name
+    +(analysisText?"\n\nAnalise do video:\n"+analysisText:"")
+    +(transcriptText?"\n\nTranscricao do video:\n"+transcriptText:"\n\n(sem transcricao; baseie-se na analise do video)");
    let copies:CopyModel[]|undefined;let lastError:unknown=null;
    for(const which of order){const cfg=providers[which];if(!cfg)continue;
     try{copies=await run(cfg,which,prompt);break;}catch(err){lastError=err;}}
    if(!copies){if(lastError)throw lastError;
     return {ok:false,error:"Nenhum provedor de IA configurado. Configure OpenAI, Anthropic ou OpenRouter em Integracoes."};}
-   out[item.creativeId]=copies;
+   out[item.key??item.creativeId]=copies.map(c=>({primaryText:c.primaryText,headline:c.headline,cta:normalizeCta(c.cta)}));
   }
  }catch(err){const detail=err instanceof Error?err.message:String(err);
   const friendly=/insufficient_quota|credit/i.test(detail)?"A conta do provedor de IA esta sem creditos. Adicione creditos no provedor escolhido ou configure outro em Integracoes.":
