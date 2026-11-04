@@ -48,6 +48,16 @@ export default async function IntegrationsPage({
     [organizationId, scope.project_id],
   )).rows[0] ?? { total: 0, active: 0, last_event_at: null };
 
+  const tictoSummary = (await database.pool.query<{ total: number; active: number; last_event_at: Date | null }>(
+    `select count(distinct connection.id)::int total,
+            count(distinct connection.id) filter(where connection.status='active')::int active,
+            max(event.received_at) last_event_at
+       from public.connections connection
+       left join public.raw_events event on event.connection_id=connection.id
+      where connection.organization_id=$1 and connection.project_id=$2
+        and connection.provider='ticto'`,
+    [organizationId, scope.project_id],
+  )).rows[0] ?? { total: 0, active: 0, last_event_at: null };
   const formatWhen = (when: Date) =>
     new Intl.DateTimeFormat("pt-BR", {
       dateStyle: "short",
@@ -88,6 +98,15 @@ export default async function IntegrationsPage({
       active: configCheckoutSummary.active > 0,
       detail: configCheckoutSummary.last_event_at ? `Último evento em ${formatWhen(configCheckoutSummary.last_event_at)}` : "Cada vendedor recebe uma URL e um token próprios.",
       cta: configCheckoutSummary.total ? "Gerenciar vendedores" : "Conectar vendedor",
+    },
+    {
+      id: "ticto",
+      name: "Ticto",
+      href: "/dashboard/integracoes/ticto",
+      status: tictoSummary.total ? `${tictoSummary.active} de ${tictoSummary.total} conexão(ões) ativa(s)` : "Nenhuma conexão ativa",
+      active: tictoSummary.active > 0,
+      detail: tictoSummary.last_event_at ? `Último evento em ${formatWhen(tictoSummary.last_event_at)}` : "Vendas da Ticto entram por webhook e disparam o Purchase para a Meta.",
+      cta: tictoSummary.total ? "Gerenciar" : "Conectar",
     },
   ];
   const marketing: HubCard[] = [
