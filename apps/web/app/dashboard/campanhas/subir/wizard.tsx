@@ -189,6 +189,8 @@ export function UploadWizard({accounts,creatives,templates,products}:{
   <nav aria-label="Etapas da subida" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
    {["1. Destino","2. Criativos","3. Estrutura","4. Conjunto","5. Copys e revisao"].map((label,index)=>
     <button key={label} type="button" className={step===index+1?"period-active":"secondary-button"}
+     style={step===index+1?{background:"#f59e0b",color:"#1a1207",fontWeight:700,borderColor:"#f59e0b",boxShadow:"0 0 0 2px rgba(245,158,11,.35)"}:undefined}
+     aria-current={step===index+1?"step":undefined}
      onClick={()=>setStep(index+1)}>{label}</button>)}
   </nav>
 
