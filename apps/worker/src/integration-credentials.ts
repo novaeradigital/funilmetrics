@@ -298,3 +298,30 @@ export async function loadMetaConnectionAccessToken(
   const token=String(secret.accessToken??"").trim();
   return token||null;
 }
+
+export async function loadMetaCapiToken(
+  pool: pg.Pool,
+  projectId: string,
+  businessProjectId: string,
+): Promise<string | null> {
+  const result = await pool.query<Pick<
+    StoredIntegration,
+    "ciphertext" | "initialization_vector" | "authentication_tag"
+  >>(
+    `select ciphertext, initialization_vector, authentication_tag
+       from public.integration_secrets
+      where project_id = $1
+        and provider = 'meta_capi'
+        and kind = 'capi_token:' || $2
+        and rotated_at is null
+      order by created_at desc limit 1`,
+    [projectId, businessProjectId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const key = vaultKey();
+  if (!key) throw new Error("integration_vault_disabled");
+  const secret = decryptCredentialBundle(row, key);
+  const token = String(secret.accessToken ?? "").trim();
+  return token || null;
+}

@@ -16,6 +16,7 @@ import { scheduleGoogleDriveSync } from "./google-drive-sync-scheduler.js";
 import {processCreativeTextExtraction} from "./creative-text-extraction.js";
 import {scheduleMetaSync} from "./meta-sync-scheduler.js";
 import {processMetaSync} from "./meta-sync.js";
+import {processMetaEventBatch} from "./meta-event-dispatcher.js";
 import {generateScheduledReport} from "./report-scheduler.js";
 import {processCurrencyConversions} from "./currency-conversion.js";
 
@@ -144,6 +145,12 @@ export async function runWorker(signal: AbortSignal) {
         if(metaSync.claimed>0){
           process.stdout.write(`${JSON.stringify({
             event:"meta_sync_processed",...metaSync,
+          })}\n`);
+        }
+        const metaEvents=await processMetaEventBatch(database.pool,batchSize,maxAttempts);
+        if(metaEvents.claimed>0){
+          process.stdout.write(`${JSON.stringify({
+            event:"meta_event_batch_processed",...metaEvents,
           })}\n`);
         }
         const currencyConversion=await processCurrencyConversions(database.pool);
