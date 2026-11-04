@@ -1,6 +1,6 @@
 "use client";
 import {useMemo,useState,useTransition} from "react";
-import {createUpload,saveTemplate,generateCopies,getDestinationPages,type DestinationPage} from "./actions";
+import {createUpload,saveTemplate,generateCopies,getDestinationPages,getDestinationPixels,type DestinationPage,type DestinationPixel} from "./actions";
 import {expandStructure,resolveNamingPattern,buildUtmQuery,type NamingContext} from "../../../../lib/campaign-naming";
 
 export type WizardAccount={id:string;externalId:string;name:string;currency:string|null};
@@ -9,6 +9,7 @@ export type WizardTemplate={id:string;name:string;config:Record<string,unknown>}
 type CopyModel={primaryText:string;headline:string;cta:string};
 type DestinationState={pageId:string;instagramId:string;pixelId:string;event:string};
 type PagesState={loading:boolean;error?:string;pages:DestinationPage[]};
+type PixelsState={loading:boolean;error?:string;pixels:DestinationPixel[]};
 
 const OBJECTIVES=["OUTCOME_SALES","OUTCOME_LEADS","OUTCOME_TRAFFIC","OUTCOME_ENGAGEMENT","OUTCOME_AWARENESS"];
 const EVENTS=["Purchase","Lead","CompleteRegistration","InitiateCheckout","ViewContent"];
@@ -32,6 +33,7 @@ export function UploadWizard({accounts,creatives,templates,products}:{
  const [edited,setEdited]=useState<Record<string,CopyModel>>({});
  const [copyError,setCopyError]=useState("");
  const [pagesByAccount,setPagesByAccount]=useState<Record<string,PagesState>>({});
+ const [pixelsByAccount,setPixelsByAccount]=useState<Record<string,PixelsState>>({});
  const [pending,startTransition]=useTransition();
 
  const creativeById=useMemo(()=>new Map(creatives.map(c=>[c.id,c])),[creatives]);
@@ -54,6 +56,16 @@ export function UploadWizard({accounts,creatives,templates,products}:{
      :{loading:false,error:result.error??"Nao foi possivel carregar as paginas.",pages:[]}}));
    }).catch(()=>{
     setPagesByAccount(prev=>({...prev,[externalId]:{loading:false,error:"Nao foi possivel carregar as paginas.",pages:[]}}));
+   });
+  }
+  if(selecting&&!pixelsByAccount[externalId]){
+   setPixelsByAccount(prev=>({...prev,[externalId]:{loading:true,pixels:[]}}));
+   getDestinationPixels(externalId).then(result=>{
+    setPixelsByAccount(prev=>({...prev,[externalId]:result.ok
+     ?{loading:false,pixels:result.pixels??[]}
+     :{loading:false,error:result.error??"Nao foi possivel carregar os pixels.",pixels:[]}}));
+   }).catch(()=>{
+    setPixelsByAccount(prev=>({...prev,[externalId]:{loading:false,error:"Nao foi possivel carregar os pixels.",pixels:[]}}));
    });
   }
  }
@@ -203,8 +215,16 @@ export function UploadWizard({accounts,creatives,templates,products}:{
       {(()=>{const sel=pagesByAccount[account.externalId]?.pages.find(page=>page.id===(destinations[account.externalId]?.pageId??""));
        return sel?.instagramId?<option value={sel.instagramId}>@{sel.instagramUsername||sel.instagramId}</option>:null;})()}
      </select></label>
-     <label>Pixel<input value={destinations[account.externalId]?.pixelId??""} placeholder="ID do pixel"
-      onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",instagramId:"",event:"Purchase"}),pixelId:e.target.value}}))}/></label>
+     <label>Pixel{pixelsByAccount[account.externalId]?.loading
+      ?<span>Carregando pixels...</span>
+      :pixelsByAccount[account.externalId]?.error
+       ?<span style={{color:"#c0392b"}}>{pixelsByAccount[account.externalId]?.error}</span>
+       :<select value={destinations[account.externalId]?.pixelId??""}
+         onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",instagramId:"",event:"Purchase"}),pixelId:e.target.value}}))}>
+         <option value="">Sem pixel (opcional)</option>
+         {(pixelsByAccount[account.externalId]?.pixels??[]).map(pixel=>
+          <option key={pixel.id} value={pixel.id}>{pixel.name}</option>)}
+        </select>}</label>
      <label>Evento<select value={destinations[account.externalId]?.event??"Purchase"}
       onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",instagramId:"",pixelId:""}),event:e.target.value}}))}>
       {EVENTS.map(ev=><option key={ev} value={ev}>{ev}</option>)}</select></label>

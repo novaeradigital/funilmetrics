@@ -252,6 +252,26 @@ export async function getDestinationPages(accountExternalId:string):Promise<{ok:
  return {ok:true,pages:[...pages.values()].sort((a,b)=>a.name.localeCompare(b.name))};
 }
 
+export type DestinationPixel={id:string;name:string};
+export async function getDestinationPixels(accountExternalId:string):Promise<{ok:boolean;error?:string;pixels?:DestinationPixel[]}>{
+ const actor=await requireEditor();
+ const db=getDatabase();
+ const account=(await db.pool.query<{connection_id:string}>(
+  "select connection_id from public.meta_ad_accounts where project_id=$1 and external_id=$2 limit 1",
+  [actor.projectId,accountExternalId])).rows[0];
+ if(!account)return {ok:false,error:"Conta nao encontrada neste projeto."};
+ let token:string|null=null;
+ try{token=await loadMetaConnectionAccessToken(db.pool,account.connection_id);}catch{token=null;}
+ if(!token)return {ok:false,error:"Conexao da Meta sem token valido. Reconecte o perfil em Integracoes."};
+ const res=await fetch(`https://graph.facebook.com/v25.0/${accountExternalId}/adspixels?fields=id,name&limit=100&access_token=${encodeURIComponent(token)}`)
+  .catch(()=>null);
+ const payload=(await res?.json().catch(()=>({}))) as {data?:Array<{id:string;name?:string}>;error?:{message?:string}}|undefined;
+ if(!payload||payload.error)return {ok:false,error:"Nao foi possivel carregar os pixels desta conta."};
+ const pixels=(payload.data??[]).map(entry=>({id:String(entry.id),name:String(entry.name??entry.id)}))
+  .sort((a,b)=>a.name.localeCompare(b.name));
+ return {ok:true,pixels};
+}
+
 export async function generateCopies(input:{
  productName:string;
  items:Array<{creativeId:string;name:string;transcript:string|null}>;
