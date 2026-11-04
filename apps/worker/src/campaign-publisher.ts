@@ -307,7 +307,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
               await storage.getPrivateObject(asset.object_key));
             const isVideo = asset.mime_type.startsWith("video/");
             if (isVideo) {
-              if (bytes.length > 200 * 1024 * 1024) throw { code: "media_too_large", message: "Video acima de 200 MB." } as GraphError;
+              if (bytes.length > 1024 * 1024 * 1024) throw { code: "media_too_large", message: "Video acima de 1 GB." } as GraphError;
               const uploaded = await graphUpload(token, `${act}/advideos`, "source",
                 bytes, asset.mime_type, item.name, { title: item.name });
               // A Meta exige miniatura no anuncio de video; ela e gerada
