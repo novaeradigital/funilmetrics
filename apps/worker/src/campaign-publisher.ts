@@ -360,22 +360,34 @@ export async function processCampaignUploads(pool: pg.Pool) {
             const isVideo = asset.mime_type.startsWith("video/");
             if (isVideo) {
               if (bytes.length > 1024 * 1024 * 1024) throw { code: "media_too_large", message: "Video acima de 1 GB." } as GraphError;
-              const uploaded = await uploadVideoResumable(token, act, bytes, item.name);
+              // Se uma tentativa anterior ja enviou o video, reaproveita o
+              // id guardado no item em vez de reenviar o arquivo inteiro.
+              let videoId = String((item.payload ?? {}).metaVideoId ?? "");
+              if (!videoId) {
+                const uploaded = await uploadVideoResumable(token, act, bytes, item.name);
+                videoId = String(uploaded.id);
+                await pool.query(
+                  `update public.campaign_upload_items
+                      set payload = jsonb_set(coalesce(payload, '{}'::jsonb), '{metaVideoId}', to_jsonb($2::text), true),
+                          updated_at = now()
+                    where id = $1`, [item.id, videoId]);
+              }
               // A Meta exige miniatura no anuncio de video; ela e gerada
-              // de forma assincrona, entao espera ate aparecer.
+              // de forma assincrona, entao espera ate aparecer. Video grande
+              // pode levar varios minutos para processar depois do envio.
               let imageUrl = "";
-              for (let attempt = 0; attempt < 9 && !imageUrl; attempt += 1) {
-                const thumbs = await graphGet(token, `${uploaded.id}/thumbnails`,
+              for (let attempt = 0; attempt < 40 && !imageUrl; attempt += 1) {
+                const thumbs = await graphGet(token, `${videoId}/thumbnails`,
                   { fields: "uri,is_preferred" }).catch(() => null);
                 const list = (thumbs?.data ?? []) as Array<{ uri?: string; is_preferred?: boolean }>;
                 const pick = list.find((entry) => entry.is_preferred) ?? list[0];
                 if (pick?.uri) imageUrl = String(pick.uri);
-                else await new Promise((resolve) => setTimeout(resolve, 10000));
+                else await new Promise((resolve) => setTimeout(resolve, 15000));
               }
               if (!imageUrl) {
                 throw { code: "video_thumbnail_pending", message: "Miniatura do video ainda nao foi gerada pela Meta; tente de novo em instantes." } as GraphError;
               }
-              media = { videoId: String(uploaded.id), imageUrl };
+              media = { videoId, imageUrl };
             } else {
               const uploaded = await graphUpload(token, `${act}/adimages`, "filename",
                 bytes, asset.mime_type, item.name);
