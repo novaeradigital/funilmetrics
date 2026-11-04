@@ -287,9 +287,12 @@ export async function processCampaignUploads(pool: pg.Pool) {
             status: "PAUSED",
             special_ad_categories: [],
             is_adset_budget_sharing_enabled: false,
-            bid_strategy: "LOWEST_COST_WITHOUT_CAP",
           };
           if (adSetConfig.budgetLevel === "campaign") {
+            // Com orcamento na campanha (CBO), a estrategia de lance vai
+            // nela. Sem orcamento na campanha (orcamento no conjunto), a
+            // Meta rejeita bid_strategy: "campanha sem orcamento".
+            fields.bid_strategy = "LOWEST_COST_WITHOUT_CAP";
             fields.daily_budget = Math.round(Number(adSetConfig.dailyBudget ?? 0) * 100);
           }
           const created = await graphPost(token, `${act}/campaigns`, fields);
