@@ -125,7 +125,7 @@ async function graphVideoRequest(
 ): Promise<Record<string, any>> {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
-  if (chunk) form.append("file_offset", new Blob([new Uint8Array(chunk)]));
+  if (chunk) form.append("video_file_chunk", new Blob([new Uint8Array(chunk)]));
   const response = await fetch(`${base}/${path}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
@@ -141,7 +141,7 @@ async function graphVideoRequest(
 async function uploadVideoResumable(
   token: string, act: string, bytes: Buffer, title: string,
 ): Promise<{ id: string }> {
-  const started = await graphVideoRequest(token, graphBase, `${act}/advideos`, {
+  const started = await graphVideoRequest(token, graphVideoBase, `${act}/advideos`, {
     upload_phase: "start", file_size: String(bytes.length),
   });
   const sessionId = String(started.upload_session_id ?? "");
@@ -158,14 +158,14 @@ async function uploadVideoResumable(
       throw { code: "video_upload_stalled", message: "Envio do video nao avancou na Meta." } as GraphError;
     }
     const chunk = bytes.subarray(start, Math.min(end, bytes.length));
-    const transferred = await graphVideoRequest(token, graphVideoBase, sessionId, {
-      upload_phase: "transfer", start_offset: String(start),
+    const transferred = await graphVideoRequest(token, graphVideoBase, `${act}/advideos`, {
+      upload_phase: "transfer", upload_session_id: sessionId, start_offset: String(start),
     }, chunk);
     start = Number(transferred.start_offset ?? start + chunk.length);
     end = Number(transferred.end_offset ?? bytes.length);
   }
-  await graphVideoRequest(token, graphVideoBase, sessionId, {
-    upload_phase: "finish", title,
+  await graphVideoRequest(token, graphVideoBase, `${act}/advideos`, {
+    upload_phase: "finish", upload_session_id: sessionId, title,
   });
   return { id: videoId };
 }
