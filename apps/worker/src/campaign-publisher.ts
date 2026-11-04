@@ -140,6 +140,7 @@ async function graphVideoRequest(
 
 async function uploadVideoResumable(
   token: string, act: string, bytes: Buffer, title: string,
+  onProgress?: (pct: number) => Promise<void>,
 ): Promise<{ id: string }> {
   const started = await graphVideoRequest(token, graphVideoBase, `${act}/advideos`, {
     upload_phase: "start", file_size: String(bytes.length),
@@ -152,6 +153,7 @@ async function uploadVideoResumable(
   let start = Number(started.start_offset ?? 0);
   let end = Number(started.end_offset ?? 0);
   let guard = 0;
+  let lastPct = 0;
   while (start < bytes.length) {
     guard += 1;
     if (guard > 100 || end <= start) {
@@ -163,6 +165,13 @@ async function uploadVideoResumable(
     }, chunk);
     start = Number(transferred.start_offset ?? start + chunk.length);
     end = Number(transferred.end_offset ?? bytes.length);
+    if (onProgress) {
+      const pct = Math.min(100, Math.round((start / bytes.length) * 100));
+      if (pct >= lastPct + 10 || pct === 100) {
+        lastPct = pct;
+        await onProgress(pct);
+      }
+    }
   }
   await graphVideoRequest(token, graphVideoBase, `${act}/advideos`, {
     upload_phase: "finish", upload_session_id: sessionId, title,
@@ -238,14 +247,15 @@ export async function processCampaignUploads(pool: pg.Pool) {
     }
     const r2 = await loadProjectR2Config(pool, upload.project_id);
     const storage = r2 ? new R2CreativeStorage(r2) : null;
-    const mediaCache = new Map<string, { videoId?: string; imageHash?: string; imageUrl?: string }>();
+    const mediaCache = new Map<string, Promise<{ videoId?: string; imageHash?: string; imageUrl?: string }>>();
     const bidStrategyFixed = new Set<string>();
 
     const markFailed = async (item: ItemRow, code: string, message: string) => {
       item.status = "failed";
       await pool.query(
         `update public.campaign_upload_items
-            set status = 'failed', error_code = $2, error_message = $3, updated_at = now()
+            set status = 'failed', error_code = $2, error_message = $3,
+                payload = coalesce(payload, '{}'::jsonb) - 'stage', updated_at = now()
           where id = $1`, [item.id, code, message.slice(0, 500)]);
     };
     const markSkipped = async (item: ItemRow) => {
@@ -262,18 +272,27 @@ export async function processCampaignUploads(pool: pg.Pool) {
       await pool.query(
         `update public.campaign_upload_items
             set status = 'created', external_id = $2, error_code = null,
-                error_message = null, updated_at = now()
+                error_message = null,
+                payload = coalesce(payload, '{}'::jsonb) - 'stage', updated_at = now()
           where id = $1`, [item.id, externalId]);
     };
 
-    for (const item of items) {
-      if (item.status === "created") continue;
+    const setStage = async (item: ItemRow, stage: string) => {
+      await pool.query(
+        `update public.campaign_upload_items
+            set payload = jsonb_set(coalesce(payload, '{}'::jsonb), '{stage}', to_jsonb($2::text), true),
+                updated_at = now()
+          where id = $1`, [item.id, stage]).catch(() => {});
+    };
+
+    const processItem = async (item: ItemRow): Promise<void> => {
+      if (item.status === "created") return;
       const token = tokens.get(item.account_external_id);
-      if (!token) { await markFailed(item, "meta_token_missing", "Token Meta nao encontrado para a conta."); continue; }
+      if (!token) { await markFailed(item, "meta_token_missing", "Token Meta nao encontrado para a conta."); return; }
       const parent = item.parent_item_id ? byId.get(item.parent_item_id) : null;
       if (item.level !== "campaign" && (!parent || parent.status !== "created" || !parent.external_id)) {
         await markSkipped(item);
-        continue;
+        return;
       }
       await pool.query(
         `update public.campaign_upload_items set status = 'creating', updated_at = now() where id = $1`,
@@ -356,51 +375,60 @@ export async function processCampaignUploads(pool: pg.Pool) {
             [item.creative_id, upload.project_id])).rows[0];
           if (!asset) throw { code: "creative_asset_missing", message: "Arquivo do criativo nao encontrado." } as GraphError;
           const cacheKey = `${act}:${item.creative_id}`;
-          let media = mediaCache.get(cacheKey);
-          if (!media) {
-            const bytes = await streamToBuffer(
-              await storage.getPrivateObject(asset.object_key));
-            const isVideo = asset.mime_type.startsWith("video/");
-            if (isVideo) {
-              if (bytes.length > 1024 * 1024 * 1024) throw { code: "media_too_large", message: "Video acima de 1 GB." } as GraphError;
-              // Se uma tentativa anterior ja enviou o video, reaproveita o
-              // id guardado no item em vez de reenviar o arquivo inteiro.
-              let videoId = String((item.payload ?? {}).metaVideoId ?? "");
-              if (!videoId) {
-                const uploaded = await uploadVideoResumable(token, act, bytes, item.name);
-                videoId = String(uploaded.id);
-                await pool.query(
-                  `update public.campaign_upload_items
-                      set payload = jsonb_set(coalesce(payload, '{}'::jsonb), '{metaVideoId}', to_jsonb($2::text), true),
-                          updated_at = now()
-                    where id = $1`, [item.id, videoId]);
+          let mediaPromise = mediaCache.get(cacheKey);
+          if (!mediaPromise) {
+            mediaPromise = (async () => {
+              const bytes = await streamToBuffer(
+                await storage.getPrivateObject(asset.object_key));
+              const isVideo = asset.mime_type.startsWith("video/");
+              if (isVideo) {
+                if (bytes.length > 1024 * 1024 * 1024) throw { code: "media_too_large", message: "Video acima de 1 GB." } as GraphError;
+                // Video que esta conta ja recebeu (nesta ou em outra
+                // subida) nao e reenviado: reaproveita o id guardado, que
+                // e a parte lenta do processo.
+                let videoId = String((item.payload ?? {}).metaVideoId ?? "");
+                if (videoId) {
+                  const alive = await graphGet(token, videoId, { fields: "id" }).catch(() => null);
+                  if (!alive) videoId = "";
+                }
+                if (!videoId) {
+                  const uploaded = await uploadVideoResumable(token, act, bytes, item.name,
+                    async (pct) => { await setStage(item, `Enviando o video: ${pct}%`); });
+                  videoId = String(uploaded.id);
+                  await pool.query(
+                    `update public.campaign_upload_items
+                        set payload = jsonb_set(coalesce(payload, '{}'::jsonb), '{metaVideoId}', to_jsonb($2::text), true),
+                            updated_at = now()
+                      where id = $1`, [item.id, videoId]);
+                }
+                await setStage(item, "Video na Meta, aguardando o processamento");
+                // A Meta exige miniatura no anuncio de video; ela e
+                // gerada de forma assincrona, entao espera ate aparecer.
+                // Video grande pode levar minutos para processar.
+                let imageUrl = "";
+                for (let attempt = 0; attempt < 40 && !imageUrl; attempt += 1) {
+                  const thumbs = await graphGet(token, `${videoId}/thumbnails`,
+                    { fields: "uri,is_preferred" }).catch(() => null);
+                  const list = (thumbs?.data ?? []) as Array<{ uri?: string; is_preferred?: boolean }>;
+                  const pick = list.find((entry) => entry.is_preferred) ?? list[0];
+                  if (pick?.uri) imageUrl = String(pick.uri);
+                  else await new Promise((resolve) => setTimeout(resolve, 15000));
+                }
+                if (!imageUrl) {
+                  throw { code: "video_thumbnail_pending", message: "Miniatura do video ainda nao foi gerada pela Meta; tente de novo em instantes." } as GraphError;
+                }
+                return { videoId, imageUrl };
               }
-              // A Meta exige miniatura no anuncio de video; ela e gerada
-              // de forma assincrona, entao espera ate aparecer. Video grande
-              // pode levar varios minutos para processar depois do envio.
-              let imageUrl = "";
-              for (let attempt = 0; attempt < 40 && !imageUrl; attempt += 1) {
-                const thumbs = await graphGet(token, `${videoId}/thumbnails`,
-                  { fields: "uri,is_preferred" }).catch(() => null);
-                const list = (thumbs?.data ?? []) as Array<{ uri?: string; is_preferred?: boolean }>;
-                const pick = list.find((entry) => entry.is_preferred) ?? list[0];
-                if (pick?.uri) imageUrl = String(pick.uri);
-                else await new Promise((resolve) => setTimeout(resolve, 15000));
-              }
-              if (!imageUrl) {
-                throw { code: "video_thumbnail_pending", message: "Miniatura do video ainda nao foi gerada pela Meta; tente de novo em instantes." } as GraphError;
-              }
-              media = { videoId, imageUrl };
-            } else {
               const uploaded = await graphUpload(token, `${act}/adimages`, "filename",
                 bytes, asset.mime_type, item.name);
               const images = (uploaded.images ?? {}) as Record<string, { hash?: string }>;
               const first = Object.values(images)[0];
               if (!first?.hash) throw { code: "image_hash_missing", message: "Meta nao devolveu o hash da imagem." } as GraphError;
-              media = { imageHash: first.hash };
-            }
-            mediaCache.set(cacheKey, media);
+              return { imageHash: first.hash };
+            })();
+            mediaCache.set(cacheKey, mediaPromise);
           }
+          const media = await mediaPromise;
           const payload = item.payload ?? {};
           const copy = item.copy ?? { primaryText: "", headline: "", cta: "" };
           const destinationUrl = String(payload.destinationUrl ?? "");
@@ -423,6 +451,7 @@ export async function processCampaignUploads(pool: pg.Pool) {
               call_to_action: { type: ctaType(copy.cta), value: { link: destinationUrl } },
             };
           }
+          await setStage(item, "Criando o anuncio na Meta");
           const creative = await graphPost(token, `${act}/adcreatives`, {
             name: item.name, object_story_spec: storySpec,
           });
@@ -440,7 +469,26 @@ export async function processCampaignUploads(pool: pg.Pool) {
           typeof failure?.code === "string" ? failure.code : "publish_failed",
           typeof failure?.message === "string" ? failure.message : "Erro desconhecido na publicacao.");
       }
+    };
+
+    // Campanhas e conjuntos primeiro, em serie: sao rapidos e sao os pais
+    // dos anuncios. Anuncios rodam em paralelo (ate 3), porque e neles que
+    // mora a espera: envio do video e processamento na Meta.
+    for (const item of items) {
+      if (item.level !== "ad") await processItem(item);
     }
+    const adItems = items.filter((item) => item.level === "ad");
+    let adCursor = 0;
+    const adWorkers = Array.from(
+      { length: Math.min(3, Math.max(1, adItems.length)) },
+      async () => {
+        while (adCursor < adItems.length) {
+          const item = adItems[adCursor];
+          adCursor += 1;
+          if (item) await processItem(item);
+        }
+      });
+    await Promise.all(adWorkers);
 
     // ativacao ao final, quando o modo de envio e ativo
     if (upload.send_mode === "active") {

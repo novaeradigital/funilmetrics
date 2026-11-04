@@ -9,7 +9,7 @@ import {retryUpload} from "./actions";
 export const dynamic="force-dynamic";
 
 type UploadRow={id:string;status:string;send_mode:string;summary:Record<string,number>;error_message:string|null;created_at:string;finished_at:string|null;created_by:string};
-type ItemRow={id:string;upload_id:string;account_external_id:string;level:string;name:string;status:string;external_id:string|null;error_message:string|null};
+type ItemRow={id:string;upload_id:string;account_external_id:string;level:string;name:string;status:string;external_id:string|null;error_message:string|null;payload:{stage?:string}|null};
 
 const STATUS_LABEL:Record<string,string>={draft:"Rascunho",queued:"Na fila",publishing:"Publicando",completed:"Concluida",partial:"Parcial",failed:"Falhou",cancelled:"Cancelada",pending:"Pendente",creating:"Criando",created:"Criado",skipped:"Pulado"};
 const LEVEL_LABEL:Record<string,string>={campaign:"Campanha",adset:"Conjunto",ad:"Anuncio"};
@@ -29,7 +29,7 @@ export default async function PublicacoesPage({searchParams}:{searchParams:Promi
      left join public.users us on us.id=u.created_by_user_id
     where u.project_id=$1 order by u.created_at desc limit 50`,[project.id])).rows;
  const items=uploads.length?(await db.pool.query<ItemRow>(
-  `select id::text,upload_id::text,account_external_id,level,name,status,external_id,error_message
+  `select id::text,upload_id::text,account_external_id,level,name,status,external_id,error_message,payload
      from public.campaign_upload_items where upload_id=any($1::uuid[])
     order by case level when 'campaign' then 0 when 'adset' then 1 else 2 end,created_at`,
   [uploads.map(u=>u.id)])).rows:[];
@@ -63,7 +63,7 @@ export default async function PublicacoesPage({searchParams}:{searchParams:Promi
        <thead><tr><th>Nivel</th><th>Nome</th><th>Conta</th><th>Status</th><th>ID na Meta</th><th>Erro</th></tr></thead>
        <tbody>{(byUpload.get(upload.id)??[]).map(item=><tr key={item.id}>
         <td>{LEVEL_LABEL[item.level]??item.level}</td><td>{item.name}</td><td>{item.account_external_id}</td>
-        <td>{STATUS_LABEL[item.status]??item.status}</td><td>{item.external_id??""}</td><td>{item.error_message??""}</td>
+        <td>{STATUS_LABEL[item.status]??item.status}{item.status==="creating"&&item.payload?.stage?<div style={{fontSize:12,opacity:0.75}}>{item.payload.stage}</div>:null}</td><td>{item.external_id??""}</td><td>{item.error_message??""}</td>
        </tr>)}</tbody>
       </table>
      </section>)}

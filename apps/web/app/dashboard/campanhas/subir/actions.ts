@@ -111,6 +111,26 @@ export async function createUpload(formData:FormData){
   redirect("/dashboard/campanhas/subir?status=invalid");
  const mode=sendMode==="paused"||sendMode==="active"?sendMode:"draft";
  const items=buildItems(config!);
+ // Reuso de video entre subidas: se este criativo ja foi enviado para a
+ // mesma conta, o anuncio ja nasce com o video da Meta e o publicador pula
+ // o envio do arquivo, que e a parte lenta.
+ try{
+  const prior=(await getDatabase().pool.query<{account_external_id:string;creative_id:string;vid:string}>(
+   `select distinct on (i.account_external_id,i.creative_id)
+     i.account_external_id,i.creative_id,i.payload->>'metaVideoId' as vid
+    from public.campaign_upload_items i
+    join public.campaign_uploads u on u.id=i.upload_id
+    where u.project_id=$1 and i.level='ad' and i.status='created'
+      and i.payload->>'metaVideoId' is not null
+    order by i.account_external_id,i.creative_id,i.created_at desc`,
+   [actor.projectId])).rows;
+  const byKey=new Map(prior.map(r=>[`${r.account_external_id}:${r.creative_id}`,r.vid]));
+  for(const item of items){
+   if(item.level!=="ad"||!item.creative_id)continue;
+   const vid=byKey.get(`${item.account_external_id}:${item.creative_id}`);
+   if(vid)(item.payload as Record<string,unknown>).metaVideoId=vid;
+  }
+ }catch{/* sem reuso, o publicador envia o video normalmente */}
  const summary={
   accounts:config!.destinations.length,
   campaigns:items.filter(i=>i.level==="campaign").length,
