@@ -1,0 +1,35 @@
+services:
+  web:
+    build: { context: ., dockerfile: Dockerfile.web }
+    env_file: [.env.web]
+    ports: ["127.0.0.1:3000:3000"]
+    volumes: ["./certs:/certs:ro"]
+    depends_on: [api]
+    restart: unless-stopped
+  api:
+    build: { context: ., dockerfile: Dockerfile.api }
+    env_file: [.env.api]
+    ports: ["127.0.0.1:3001:3001"]
+    volumes: ["./certs:/certs:ro"]
+    restart: unless-stopped
+  worker:
+    build: { context: ., dockerfile: Dockerfile.worker }
+    env_file: [.env.worker]
+    volumes: ["./certs:/certs:ro"]
+    profiles: ["full"]
+    restart: unless-stopped
+  clamav:
+    image: clamav/clamav:latest
+    volumes: ["./clamav/clamd.conf:/etc/clamav/clamd.conf:ro"]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api]
+    restart: unless-stopped
+volumes: { caddy_data: {}, caddy_config: {} }
