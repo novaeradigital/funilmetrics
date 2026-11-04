@@ -676,10 +676,10 @@ export default async function CreativesPage({ searchParams }: PageProps) {
             <div className="section-heading">
               <div>
                 <p className="panel-label">Adicionar criativos</p>
-                <h2>Upload manual</h2>
+                <h2>Upload manual e link do Drive</h2>
               </div>
             </div>
-            <p>Envie arquivos direto do computador. Eles passam por quarentena e antivirus e entram na pasta escolhida quando o processamento termina.</p>
+            <p>Envie arquivos direto do computador ou cole o link publico de um arquivo ou pasta do Drive. Tudo passa por quarentena e antivirus e entra na pasta escolhida quando o processamento termina.</p>
             <CreativeImportPanel folders={creativeFolders} />
             {recentImports.length ? (
               <ul className="creative-import-jobs">

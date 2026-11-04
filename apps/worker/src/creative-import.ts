@@ -202,6 +202,7 @@ export async function processCreativeImports(pool: pg.Pool) {
       const downloaded = await downloadPublicDriveToTemp(candidate);
       temporary = downloaded.temporary;
       if (!candidate.mime_type) candidate.mime_type = downloaded.mimeType;
+      if (downloaded.fileName) candidate.display_name = downloaded.fileName;
     }
     const format = creativeFormat(candidate.mime_type ?? "");
     if (!format || format.export) {
@@ -354,9 +355,16 @@ export async function processCreativeImports(pool: pg.Pool) {
       await client.query(
         `update public.creative_import_items
             set status = 'imported', asset_id = $1, creative_id = $2,
+                display_name = $4, mime_type = $5,
                 error_code = null, updated_at = now()
           where id = $3`,
-        [asset.rows[0]!.id, creativeId, candidate.id],
+        [
+          asset.rows[0]!.id,
+          creativeId,
+          candidate.id,
+          candidate.display_name,
+          format.outputMime,
+        ],
       );
       await client.query(
         `insert into public.audit_logs (
@@ -438,12 +446,40 @@ async function downloadPublicDriveToTemp(candidate: CreativeImportCandidate) {
   if (!contentType || contentType.startsWith("text/html")) {
     throw new Error("drive_link_not_public");
   }
-  const format = creativeFormat(contentType);
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const nameMatch = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i.exec(disposition);
+  let fileName: string | undefined;
+  try {
+    const raw = nameMatch?.[1] ?? nameMatch?.[2];
+    if (raw) fileName = decodeURIComponent(raw).slice(0, 240);
+  } catch {
+    fileName = undefined;
+  }
+  let mimeType = contentType;
+  if (!creativeFormat(mimeType) && fileName) {
+    const extension = fileName.includes(".")
+      ? fileName.split(".").pop()!.toLowerCase()
+      : "";
+    const byExtension: Record<string, string> = {
+      mp4: "video/mp4",
+      mov: "video/quicktime",
+      webm: "video/webm",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      gif: "image/gif",
+      pdf: "application/pdf",
+      txt: "text/plain",
+    };
+    if (byExtension[extension]) mimeType = byExtension[extension]!;
+  }
+  const format = creativeFormat(mimeType);
   const maxBytes = format ? format.maxBytes : 2 * 1024 ** 3;
   const temporary = await writeStreamToTemp(
     candidate.id,
     response.body as AsyncIterable<Uint8Array>,
     maxBytes,
   );
-  return { temporary, mimeType: contentType };
+  return { temporary, mimeType, fileName };
 }

@@ -13,6 +13,7 @@ export function CreativeImportPanel({
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [link, setLink] = useState("");
   const [folderId, setFolderId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -60,6 +61,45 @@ export function CreativeImportPanel({
     setBusy(false);
   }
 
+  async function submitLink() {
+    const url = link.trim();
+    if (!url) {
+      setError("Cole o link do arquivo ou da pasta do Drive.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/dashboard/criativos/drive-link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url, folder_id: folderId }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        folderName?: string | null;
+      };
+      if (!response.ok || !data.ok) {
+        setError(data.message ?? "A importacao pelo link falhou. Tente de novo.");
+      } else {
+        setMessage(
+          (data.message ?? "Importacao iniciada.") +
+            (data.folderName
+              ? ` Os criativos vao para a pasta ${data.folderName}.`
+              : "") +
+            " O processamento (download e antivirus) leva alguns instantes.",
+        );
+        setLink("");
+        router.refresh();
+      }
+    } catch {
+      setError("A importacao pelo link falhou. Tente de novo.");
+    }
+    setBusy(false);
+  }
+
   return (
     <div className="creative-import-panel">
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
@@ -87,6 +127,24 @@ export function CreativeImportPanel({
           {busy ? "Enviando..." : "Enviar arquivos"}
         </button>
       </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end", marginTop: 14 }}>
+        <label style={{ flex: "1 1 320px" }}>
+          Link do Drive (arquivo ou pasta publica)
+          <input
+            value={link}
+            onChange={(event) => setLink(event.target.value)}
+            placeholder="https://drive.google.com/..."
+          />
+        </label>
+        <button type="button" disabled={busy} onClick={submitLink}>
+          {busy ? "Importando..." : "Importar pelo link"}
+        </button>
+      </div>
+      <p>
+        O link precisa estar compartilhado para qualquer pessoa com o link.
+        Pasta inteira vira uma pasta de mesmo nome na Biblioteca, se voce nao
+        escolher um destino.
+      </p>
       {message ? <p className="notice notice-success">{message}</p> : null}
       {error ? <p className="notice notice-error">{error}</p> : null}
     </div>
