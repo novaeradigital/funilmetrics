@@ -239,7 +239,7 @@ export function normalizeTictoEvent(input: {
         ...(cpf
           ? [
               {
-                type: "cpf" as const,
+                type: "document" as const,
                 normalizedValue: cpf,
                 rawValue: text(customer.cpf),
               },
