@@ -4,6 +4,7 @@ import { PRODUCT_NAME } from "@funil-metrics/domain";
 import { processLastlinkBatch } from "./lastlink-processor.js";
 import { processConfigCheckoutBatch } from "./configcheckout-processor.js";
 import {processTictoBatch} from "./ticto-processor.js";
+import {processKiwifyBatch} from "./kiwify-processor.js";
 import { evaluateDataQuality } from "./data-quality-monitor.js";
 import { loadR2StorageConfig } from "./r2-storage.js";
 import { loadClamAvConfig } from "./clamav-scanner.js";
@@ -134,6 +135,16 @@ export async function runWorker(signal: AbortSignal) {
         if (tictoResult.claimed > 0) {
           process.stdout.write(
             `${JSON.stringify({ event: "ticto_batch_processed", ...tictoResult })}\n`,
+          );
+        }
+        const kiwifyResult = await processKiwifyBatch(
+          database.pool,
+          batchSize,
+          maxAttempts,
+        );
+        if (kiwifyResult.claimed > 0) {
+          process.stdout.write(
+            `${JSON.stringify({ event: "kiwify_batch_processed", ...kiwifyResult })}\n`,
           );
         }
         const driveInventory = await processGoogleDriveInventory(database.pool);
