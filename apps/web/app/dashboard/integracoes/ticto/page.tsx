@@ -139,7 +139,7 @@ export default async function Page({
                               Negócio: {connection.business_name ?? "nenhum"}{" "}
                               ·{" "}
                               {connection.last_event_at
-                                ? `último evento ${new Date(connection.last_event_at).toLocaleString("pt-BR")}`
+                                ? `último evento ${new Date(connection.last_event_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
                                 : "nenhum evento recebido"}
                             </small>
                             <code>{url}</code>

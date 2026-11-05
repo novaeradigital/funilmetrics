@@ -94,9 +94,9 @@ export default async function Page({
                     </small>
                     <small>
                       Criado{" "}
-                      {new Date(row.created_at).toLocaleString("pt-BR")}
+                      {new Date(row.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                       {row.sent_at
-                        ? ` · enviado ${new Date(row.sent_at).toLocaleString("pt-BR")}`
+                        ? ` · enviado ${new Date(row.sent_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
                         : ""}
                       {` · ${row.attempts} tentativa(s)`}
                     </small>

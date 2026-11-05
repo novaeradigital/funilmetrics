@@ -62,6 +62,7 @@ track("page_view");
 if(CFG.productPage)track("view_content");
 if(CFG.icTriggerType==="url"&&CFG.icTriggerValue&&location.href.includes(CFG.icTriggerValue))fireIc();
 if(CFG.icTriggerType==="selector"&&CFG.icTriggerValue){try{document.querySelectorAll(CFG.icTriggerValue).forEach(el=>{const a=el.closest?.("a[href]")||(el.tagName==="A"?el:null);if(a)decorate(a)})}catch{}}
+if(CFG.icTriggerType==="url"&&CFG.icTriggerValue){document.querySelectorAll("a[href]").forEach(a=>{if(a.href.includes(CFG.icTriggerValue))decorate(a)})}
 document.querySelectorAll("video").forEach(v=>{if(sent.has(v))return;
 sent.set(v,new Set());v.addEventListener("play",()=>track("video_play"));v.addEventListener("timeupdate",()=>{if(!v.duration)return;
 const n=Math.floor(v.currentTime/v.duration*100),set=sent.get(v);for(const p of [25,50,75])if(n>=p&&!set.has(p)){set.add(p);track("video_progress_"+p,{videoId:v.id||null})}});
@@ -74,6 +75,7 @@ const a=evEl.closest?.("a[href]")||(evEl.tagName==="A"?evEl:null);if(a)decorate(
 let trig=false;
 if(CFG.icTriggerType==="selector"&&CFG.icTriggerValue){try{trig=Boolean(t.closest?.(CFG.icTriggerValue))}catch{}}
 if(CFG.icTriggerType==="id"&&CFG.icTriggerValue){trig=Boolean(byId(t,CFG.icTriggerValue))}
+if(CFG.icTriggerType==="url"&&CFG.icTriggerValue){const a=t.closest?.("a[href]");trig=Boolean(a&&a.href.includes(CFG.icTriggerValue))}
 if(trig){fireIc();const a=t.closest?.("a[href]");if(a)decorate(a)}
 const c=t.closest?.("[data-fm-cta]");if(c){const a=c.closest?.("a[href]");if(a)decorate(a);
 track("cta_click",{label:c.getAttribute("data-fm-cta")||null})}});
@@ -86,7 +88,9 @@ export async function registerTrackingRoutes(app:FastifyInstance,repository:Trac
   const parsed=params.safeParse(request.params);if(!parsed.success)return reply.code(404).send();
   const source=await repository.findPublicSource(parsed.data.publicKey);
   if(!source)return reply.code(404).send();
-  const endpoint=`${request.protocol}://${request.headers.host}/track/v1/${parsed.data.publicKey}/events`;
+  const forwardedProto=typeof request.headers["x-forwarded-proto"]==="string"?(request.headers["x-forwarded-proto"].split(",")[0] ?? "").trim():undefined;
+  const proto=forwardedProto==="https"||forwardedProto==="http"?forwardedProto:request.protocol;
+  const endpoint=`${proto}://${request.headers.host}/track/v1/${parsed.data.publicKey}/events`;
   return reply.header("content-type","application/javascript; charset=utf-8")
    .header("cache-control","public, max-age=300").send(buildScript(endpoint,scriptConfig(source)));
  });

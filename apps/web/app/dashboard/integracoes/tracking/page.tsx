@@ -51,7 +51,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{status?
  <article className="dashboard-card"><h2>Fontes instaláveis</h2>{sources.length?<div className="members-list">{sources.map(s=>{
   const script=`<script async src="${api}/track/v1/${s.public_key}/script.js"></script>`;
   return <div className="member-row" key={s.id}><div><p><strong>{s.name}</strong><small>{s.allowed_origins.join(" · ")}</small>
-   <code>{script}</code><small>{s.events} evento(s) · {s.last_event_at?`último ${new Date(s.last_event_at).toLocaleString("pt-BR")}`:"nenhum recebido"}</small>
+   <code>{script}</code><small>{s.events} evento(s) · {s.last_event_at?`último ${new Date(s.last_event_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`:"nenhum recebido"}</small>
    <small>Negócio: {s.business_name??"nenhum"} · Gatilho IC: {triggerLabels[s.ic_trigger_type]??s.ic_trigger_type}{s.ic_trigger_value?` (${s.ic_trigger_value})`:""}{s.product_page?" · ViewContent ativo":""}</small></p>
    {canEdit?<details><summary>Editar vínculo e gatilho</summary><form action={updateTrackingSource}>
     <input type="hidden" name="source_id" value={s.id}/>{metaFields("edit",s)}<button>Salvar alterações</button></form></details>:null}
