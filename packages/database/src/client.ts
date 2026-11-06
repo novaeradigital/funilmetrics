@@ -23,7 +23,7 @@ export function createDatabase(
       : options.sslRejectUnauthorized === undefined
         ? undefined
         : { rejectUnauthorized: options.sslRejectUnauthorized },
-    max: 10,
+    max: Math.max(1, Math.min(10, Number(process.env.DATABASE_POOL_MAX ?? 10) || 10)),
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });
