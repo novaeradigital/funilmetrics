@@ -7,7 +7,7 @@ export type DashboardMetricSeries=Record<string,DashboardMetricPoint[]>;
 export type DashboardQueryFilters={productId?:string|null;productIds?:string[]|null;accountId?:string|null;accountIds?:string[]|null;campaignId?:string|null;
  from?:string|null;to?:string|null;timezone?:string|null;
  offerId?:string|null;source?:string|null;medium?:string|null;paymentMethod?:string|null;paymentStatus?:string|null;buyerSegment?:"new"|"recurring"|null;
- revenueBasis?:"producer_commission"|"sale_total"|null;
+ revenueBasis?:"bruto"|"apos_reembolsos"|"liquido"|"producer_commission"|"sale_total"|null;
  /** Escopo de projeto de negócio (D-174): quando presente (mesmo vazio),
   * limita produtos e contas ao escopo, cruzando com a seleção do usuário. */
  scopeProductIds?:string[]|null;scopeAccountIds?:string[]|null};
@@ -27,34 +27,41 @@ function resolveAccountFilter(filters:DashboardQueryFilters):string[]|null{
 }
 
 function commerceFilterSql(buyerSegment:DashboardQueryFilters["buyerSegment"]){return `
- and ($8::uuid is null or exists(select 1 from public.commerce_orders filtered_order where filtered_order.id=event.order_id and filtered_order.offer_id=$8))
- and ($9::text is null or coalesce((select coalesce(nullif(a.utm_source,''),nullif(a.src,'')) from public.order_attributions a where a.order_id=event.order_id order by a.created_at desc limit 1),'N\u00e3o informado')=$9)
- and ($10::text is null or coalesce((select nullif(a.utm_medium,'') from public.order_attributions a where a.order_id=event.order_id order by a.created_at desc limit 1),'N\u00e3o informada')=$10)
- and ($11::text is null or exists(select 1 from public.payments filtered_payment where filtered_payment.order_id=event.order_id and filtered_payment.method=$11))
- and ($12::text is null or exists(select 1 from public.payments filtered_payment where filtered_payment.order_id=event.order_id and filtered_payment.status::text=$12))
- and ($13::text is null or exists(select 1 from public.commerce_orders buyer_order where buyer_order.id=event.order_id and buyer_order.person_id is not null and (select count(distinct history_event.payment_id) from public.commerce_orders history_order join public.normalized_payment_events history_event on history_event.order_id=history_order.id and history_event.data_scope='production' and history_event.sale_financial_effect>0 where history_order.project_id=event.project_id and history_order.person_id=buyer_order.person_id) ${buyerSegment==="recurring"?">=2":"=1"}))`}
+ and ($7::uuid is null or exists(select 1 from public.commerce_orders filtered_order where filtered_order.id=event.order_id and filtered_order.offer_id=$7))
+ and ($8::text is null or coalesce((select coalesce(nullif(a.utm_source,''),nullif(a.src,'')) from public.order_attributions a where a.order_id=event.order_id order by a.created_at desc limit 1),'N\u00e3o informado')=$8)
+ and ($9::text is null or coalesce((select nullif(a.utm_medium,'') from public.order_attributions a where a.order_id=event.order_id order by a.created_at desc limit 1),'N\u00e3o informada')=$9)
+ and ($10::text is null or exists(select 1 from public.payments filtered_payment where filtered_payment.order_id=event.order_id and filtered_payment.method=$10))
+ and ($11::text is null or exists(select 1 from public.payments filtered_payment where filtered_payment.order_id=event.order_id and filtered_payment.status::text=$11))
+ and ($12::text is null or exists(select 1 from public.commerce_orders buyer_order where buyer_order.id=event.order_id and buyer_order.person_id is not null and (select count(distinct history_event.payment_id) from public.commerce_orders history_order join public.normalized_payment_events history_event on history_event.order_id=history_order.id and history_event.data_scope='production' and history_event.sale_financial_effect>0 where history_order.project_id=event.project_id and history_order.person_id=buyer_order.person_id) ${buyerSegment==="recurring"?">=2":"=1"}))`}
+
+export type RevenueStage="bruto"|"apos_reembolsos"|"liquido";
+export function resolveRevenueStage(basis:DashboardQueryFilters["revenueBasis"]):RevenueStage{
+ if(basis==="liquido"||basis==="producer_commission")return "liquido";
+ if(basis==="apos_reembolsos")return "apos_reembolsos";
+ return "bruto";
+}
 
 export async function loadDashboardMetricValues(database:Database,projectId:string,periodDays:number,
  filters:DashboardQueryFilters={}){
- const revenueBasis=filters.revenueBasis==="sale_total"?"sale_total":"producer_commission";
+ const stage=resolveRevenueStage(filters.revenueBasis);
  const accountFilter=resolveAccountFilter(filters);
 
- const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
- const financial=(await database.pool.query<{gross_revenue:string;net_revenue:string;
+ const financial=(await database.pool.query<{sale_gross:string;sale_net:string;comm_net:string;
   approved_payments:number;pending_payments:number;reversed_payments:number;eligible_events:number;covered_events:number}>(`select
-   coalesce(sum(${effectColumn}) filter(where ${effectColumn}>0),0)::text gross_revenue,
-   coalesce(sum(${effectColumn}),0)::text net_revenue,
+   coalesce(sum(sale_financial_effect) filter(where sale_financial_effect>0),0)::text sale_gross,
+   coalesce(sum(sale_financial_effect),0)::text sale_net,
+   coalesce(sum(producer_commission_financial_effect),0)::text comm_net,
    count(distinct payment_id) filter(where sale_financial_effect>0)::int approved_payments,
    count(distinct payment_id) filter(where event.type='payment_pending')::int pending_payments,
    count(distinct payment_id) filter(where sale_financial_effect<0)::int reversed_payments,
    count(*) filter(where sale_financial_effect<>0)::int eligible_events,
-   count(*) filter(where sale_financial_effect<>0 and ($7='sale_total' or commission_data_status='complete'))::int covered_events
+   count(*) filter(where sale_financial_effect<>0 and commission_data_status='complete')::int covered_events
    from public.normalized_payment_events event where event.project_id=$1 and event.data_scope='production'
    and (event.occurred_at at time zone $6)>=coalesce($4::date,(now() at time zone $6)-($2::integer*interval '1 day'))
    and (event.occurred_at at time zone $6)<coalesce($5::date+interval '1 day',(now() at time zone $6)+interval '1 day') and ($3::uuid[] is null or exists(
     select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($3)
    ))${commerceFilterSql(filters.buyerSegment)}`,[projectId,periodDays,resolveProductFilter(filters),filters.from??null,filters.to??null,
-    filters.timezone??"UTC",revenueBasis,filters.offerId??null,filters.source??null,filters.medium??null,filters.paymentMethod??null,filters.paymentStatus??null,filters.buyerSegment??null])).rows[0];
+    filters.timezone??"UTC",filters.offerId??null,filters.source??null,filters.medium??null,filters.paymentMethod??null,filters.paymentStatus??null,filters.buyerSegment??null])).rows[0];
  const meta=(await database.pool.query<{spend:string;impressions:string;clicks:string;currency:string|null;
   rows:number;converted_rows:number;blocked_rows:number}>(
   `select coalesce(sum(spend_base) filter(where conversion_status in ('converted','not_required')),0)::text spend,
@@ -87,14 +94,24 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
   .then(result=>result.rows[0])
   .catch(()=>null);
  const eligible=Number(financial?.eligible_events??0),covered=Number(financial?.covered_events??0);
- const revenuePartial=eligible>covered;
+ const commissionPartial=eligible>covered;
+ const commissionCoverage={available:covered>0||eligible===0,partial:commissionPartial,
+  coverage:eligible>0?covered/eligible:1,blockedRows:Math.max(eligible-covered,0),
+  status:commissionPartial?"partial":"complete"};
+ const saleGross=Number(financial?.sale_gross??0),saleNet=Number(financial?.sale_net??0),
+  commNet=Number(financial?.comm_net??0);
+ const stageValue=stage==="bruto"?saleGross:stage==="apos_reembolsos"?saleNet:commNet;
+ const resolvedRevenue=stage==="liquido"
+  ?{value:stageValue,...commissionCoverage}
+  :{value:stageValue,available:true,partial:false,coverage:1,blockedRows:0,status:"complete"};
  return {
-  gross_revenue:{value:Number(financial?.gross_revenue??0),available:covered>0||eligible===0,
-   partial:revenuePartial,coverage:eligible>0?covered/eligible:1,
-   blockedRows:Math.max(eligible-covered,0),status:revenuePartial?"partial":"complete"},
-  net_revenue:{value:Number(financial?.net_revenue??0),available:covered>0||eligible===0,
-   partial:revenuePartial,coverage:eligible>0?covered/eligible:1,
-   blockedRows:Math.max(eligible-covered,0),status:revenuePartial?"partial":"complete"},
+  gross_revenue:resolvedRevenue,
+  net_revenue:resolvedRevenue,
+  revenue_sale_gross:{value:saleGross,available:true},
+  revenue_after_refunds:{value:saleNet,available:true},
+  revenue_platform_net:{value:commNet,...commissionCoverage},
+  revenue_refunds:{value:Math.max(0,saleGross-saleNet),available:true},
+  revenue_platform_discount:{value:saleNet-commNet,...commissionCoverage},
   approved_payments:{value:Number(financial?.approved_payments??0),available:true},
   pending_payments:{value:Number(financial?.pending_payments??0),available:true},
   reversed_payments:{value:Number(financial?.reversed_payments??0),available:true},
@@ -115,15 +132,15 @@ export async function loadDashboardMetricValues(database:Database,projectId:stri
 
 export async function loadDashboardMetricSeries(database:Database,projectId:string,periodDays:number,
  filters:DashboardQueryFilters={}){
- const revenueBasis=filters.revenueBasis==="sale_total"?"sale_total":"producer_commission";
+ const stage=resolveRevenueStage(filters.revenueBasis);
  const accountFilter=resolveAccountFilter(filters);
 
- const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
- const financial=(await database.pool.query<{metric_day:string;gross_revenue:string;net_revenue:string;
+ const financial=(await database.pool.query<{metric_day:string;sale_gross:string;sale_net:string;comm_net:string;
   approved_payments:number;reversed_payments:number}>(`select
    to_char(date_trunc('day',occurred_at at time zone $6),'YYYY-MM-DD') as metric_day,
-   coalesce(sum(${effectColumn}) filter(where ${effectColumn}>0),0)::text gross_revenue,
-   coalesce(sum(${effectColumn}),0)::text net_revenue,
+   coalesce(sum(sale_financial_effect) filter(where sale_financial_effect>0),0)::text sale_gross,
+   coalesce(sum(sale_financial_effect),0)::text sale_net,
+   coalesce(sum(producer_commission_financial_effect),0)::text comm_net,
    count(distinct payment_id) filter(where sale_financial_effect>0)::int approved_payments,
    count(distinct payment_id) filter(where sale_financial_effect<0)::int reversed_payments
    from public.normalized_payment_events event where event.project_id=$1 and event.data_scope='production'
@@ -132,7 +149,7 @@ export async function loadDashboardMetricSeries(database:Database,projectId:stri
     select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($3)
    ))${commerceFilterSql(filters.buyerSegment)} group by date_trunc('day',event.occurred_at at time zone $6)
    order by date_trunc('day',event.occurred_at at time zone $6)`,[projectId,periodDays,resolveProductFilter(filters),
-    filters.from??null,filters.to??null,filters.timezone??"UTC",revenueBasis,filters.offerId??null,filters.source??null,filters.medium??null,filters.paymentMethod??null,filters.paymentStatus??null,filters.buyerSegment??null])).rows;
+    filters.from??null,filters.to??null,filters.timezone??"UTC",filters.offerId??null,filters.source??null,filters.medium??null,filters.paymentMethod??null,filters.paymentStatus??null,filters.buyerSegment??null])).rows;
  const meta=(await database.pool.query<{metric_day:string;spend:string;impressions:string;clicks:string}>(
   `select metric_date::text as metric_day,coalesce(sum(spend_base),0)::text spend,
    coalesce(sum(impressions),0)::text impressions,coalesce(sum(clicks),0)::text clicks
@@ -143,9 +160,11 @@ export async function loadDashboardMetricSeries(database:Database,projectId:stri
    and ($3::uuid[] is null or meta_ad_account_id=any($3)) and ($4::uuid is null or meta_campaign_id=$4)
    group by metric_date order by metric_date`,[projectId,periodDays,accountFilter,
     filters.campaignId??null,filters.from??null,filters.to??null])).rows;
+ const stageSeries=financial.map(row=>({date:row.metric_day,
+   value:stage==="bruto"?Number(row.sale_gross):stage==="apos_reembolsos"?Number(row.sale_net):Number(row.comm_net)}));
  return {
-  gross_revenue:financial.map(row=>({date:row.metric_day,value:Number(row.gross_revenue)})),
-  net_revenue:financial.map(row=>({date:row.metric_day,value:Number(row.net_revenue)})),
+  gross_revenue:stageSeries,
+  net_revenue:stageSeries,
   approved_payments:financial.map(row=>({date:row.metric_day,value:Number(row.approved_payments)})),
   reversed_payments:financial.map(row=>({date:row.metric_day,value:Number(row.reversed_payments)})),
   meta_spend:meta.map(row=>({date:row.metric_day,value:Number(row.spend)})),

@@ -9,7 +9,7 @@ import {queueQuickMetaSync,waitForMetaSyncRuns} from "../../lib/meta-sync-queue"
 
 const marker="[funil-metrics:dashboard-v2]";
 const allowedKinds=new Set([
- "kpi_revenue","kpi_net_revenue","kpi_ticket","kpi_cpa","kpi_spend","kpi_profit","kpi_roas","financial_health","financial_chart",
+ "kpi_revenue","kpi_net_revenue","revenue_unified","kpi_ticket","kpi_cpa","kpi_spend","kpi_profit","kpi_roas","financial_health","financial_chart",
  "product_sales","account_spend","account_profit","channel_sales","hour_sales","conversion_funnel",
  "region_sales","ad_performance","recent_sales",
  "product_sales_donut","payment_method_sales","payment_method_approval","sales_table",

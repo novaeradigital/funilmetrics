@@ -36,7 +36,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
  const from=validDate(query.from)??shiftCalendarDate(today,-29);
  const periodDays=Math.max(1,Math.round((Date.parse(`${to}T00:00:00Z`)-Date.parse(`${from}T00:00:00Z`))/86400000)+1);
  const previousTo=shiftCalendarDate(from,-1),previousFrom=shiftCalendarDate(from,-periodDays);
- const revenueBasis=query.basis==="producer_commission"?"producer_commission" as const:"sale_total" as const,selectedProducts=productIds(query.product),selectedAccounts=productIds(query.account);
+ const revenueBasis=query.basis==="liquido"||query.basis==="producer_commission"?"liquido" as const:query.basis==="apos_reembolsos"?"apos_reembolsos" as const:"bruto" as const,selectedProducts=productIds(query.product),selectedAccounts=productIds(query.account);
  const businessProjects=await loadBusinessProjects(database.pool,project.id).catch(()=>[] as {id:string;name:string}[]);
  const businessId=resolveBusinessProjectId(query.projeto,businessProjects);
  const businessScope=businessId?await loadBusinessScope(database.pool,project.id,businessId).catch(()=>null):null;
@@ -47,8 +47,11 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
  const buyerSegment:"new"|"recurring"|null=query.buyer==="new"||query.buyer==="recurring"?query.buyer:null;
  const filters={from,to,accountIds:scopedAccountsParam,productIds:scopedProductsParam,scopeAccountIds:businessScope?businessScope.accountIds:null,scopeProductIds:businessScope?businessScope.productIds:null,timezone:project.timezone,revenueBasis,
   source:query.channel??null,medium:query.medium??null,offerId:query.offer??null,paymentMethod:query.payment_method??null,paymentStatus:query.payment_status??null,buyerSegment};
- const effectColumn=revenueBasis==="sale_total"?"sale_financial_effect":"producer_commission_financial_effect";
+ const stageAmountColumn=revenueBasis==="liquido"?"producer_commission_financial_effect":"sale_financial_effect";
+ const stageRevenueAggregate=revenueBasis==="bruto"?"coalesce(sum(event.sale_financial_effect) filter(where event.sale_financial_effect>0),0)::text revenue":revenueBasis==="apos_reembolsos"?"coalesce(sum(event.sale_financial_effect),0)::text revenue":"coalesce(sum(event.producer_commission_financial_effect),0)::text revenue";
  const emptyValues={gross_revenue:{value:0,available:false},net_revenue:{value:0,available:false},
+  revenue_sale_gross:{value:0,available:false},revenue_after_refunds:{value:0,available:false},revenue_platform_net:{value:0,available:false},
+  revenue_refunds:{value:0,available:false},revenue_platform_discount:{value:0,available:false},
   approved_payments:{value:0,available:false},pending_payments:{value:0,available:false},reversed_payments:{value:0,available:false},
   meta_spend:{value:0,available:false},meta_impressions:{value:0,available:false},meta_clicks:{value:0,available:false},meta_link_clicks:{value:0,available:false},
   meta_landing_page_views:{value:0,available:false},meta_view_content:{value:0,available:false},
@@ -68,7 +71,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
   database.pool.query<{name:string;value:number;amount:string}>(`select account.name,coalesce(sum(insight.spend_base),0)::float value,coalesce(sum(insight.spend_base),0)::text amount from public.meta_ad_insights_daily insight join public.meta_ad_accounts account on account.id=insight.meta_ad_account_id where insight.project_id=$1 and insight.metric_date between $2::date and $3::date and insight.conversion_status in ('converted','not_required') and ($4::uuid[] is null or account.id=any($4)) group by account.name order by value desc limit 6`,[project.id,from,to,scopedAccountsParam]).then(r=>r.rows.map(x=>({...x,amount:Number(x.amount)}))).catch(()=>[]),
   database.pool.query<{name:string;value:number}>(`select coalesce(nullif(attribution.utm_source,''),nullif(attribution.src,''),'N\u00e3o informado') name,count(distinct attribution.order_id)::int value from public.order_attributions attribution join public.commerce_orders orders on orders.id=attribution.order_id where orders.project_id=$1 and orders.data_scope='production' and (orders.occurred_at at time zone $4)>=$2::date and (orders.occurred_at at time zone $4)<$3::date+interval '1 day' and ($5::uuid[] is null or exists(select 1 from public.commerce_order_items item where item.order_id=orders.id and item.product_id=any($5))) group by 1 order by value desc limit 6`,[project.id,from,to,project.timezone,scopedProductsParam]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<{name:string;value:number}>(`select to_char(event.occurred_at at time zone $4,'HH24') name,count(distinct event.payment_id)::int value from public.normalized_payment_events event where event.project_id=$1 and event.data_scope='production' and event.financial_effect>0 and (event.occurred_at at time zone $4)>=$2::date and (event.occurred_at at time zone $4)<$3::date+interval '1 day' and ($5::uuid[] is null or exists(select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($5))) group by 1 order by 1`,[project.id,from,to,project.timezone,scopedProductsParam]).then(r=>r.rows).catch(()=>[]),
-  database.pool.query<SavedWidget>(`select coalesce(widget.config->>'v2InstanceId',widget.config->>'v2Kind') "instanceId",widget.config->>'v2Kind' kind,widget.title,widget.config,widget.grid_x,widget.grid_y,widget.grid_width,widget.grid_height,widget.display_order from public.dashboards dashboard join public.dashboard_versions version on version.dashboard_id=dashboard.id and version.status='draft' join public.dashboard_widgets widget on widget.dashboard_version_id=version.id where dashboard.project_id=$1 and dashboard.status='active' and dashboard.description='[funil-metrics:dashboard-v2]' and widget.config ? 'v2Kind' order by widget.display_order`,[project.id]).then(r=>r.rows).catch(()=>[]),
+  database.pool.query<SavedWidget>(`select coalesce(widget.config->>'v2InstanceId',widget.config->>'v2Kind') "instanceId",widget.config->>'v2Kind' kind,widget.title,widget.config,widget.grid_x,widget.grid_y,widget.grid_width,widget.grid_height,widget.display_order from public.dashboards dashboard join public.dashboard_versions version on version.dashboard_id=dashboard.id and version.status='draft' join public.dashboard_widgets widget on widget.dashboard_version_id=version.id where dashboard.project_id=$1 and dashboard.status='active' and dashboard.description='[funil-metrics:dashboard-v2]' and widget.config ? 'v2Kind' order by widget.display_order`,[project.id]).then(r=>{let unifiedSeen=false;return r.rows.flatMap(row=>{if(row.kind==="revenue_unified"){unifiedSeen=true;return [row]}if(row.kind!=="kpi_revenue"&&row.kind!=="kpi_net_revenue")return [row];if(unifiedSeen)return [];unifiedSeen=true;const cut=row.instanceId.indexOf("__");const suffix=cut>=0?row.instanceId.slice(cut):"";return [{...row,kind:"revenue_unified",instanceId:`revenue_unified${suffix}`}];});}).catch(()=>[]),
   database.pool.query<SavedTemplate>(`select id,name,definition,created_at::text "createdAt" from public.dashboard_templates where project_id=$1 and not is_system order by created_at desc`,[project.id]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<{utm_content:string|null;sales:number;revenue:string}>(`
    with first_attr as (
@@ -78,7 +81,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
       order by attr.order_id, attr.created_at asc)
    select first_attr.utm_content,
      count(distinct event.payment_id)::int sales,
-     coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
+     ${stageRevenueAggregate}
      from public.normalized_payment_events event
      left join first_attr on first_attr.order_id=event.order_id
     where event.project_id=$1 and event.data_scope='production'
@@ -99,7 +102,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
   database.pool.query<{phone:string|null;sales:number;revenue:string}>(`
    select phone.normalized_value phone,
      count(distinct event.payment_id)::int sales,
-     coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
+     ${stageRevenueAggregate}
      from public.normalized_payment_events event
      join public.commerce_orders ord on ord.id=event.order_id
      left join lateral (select ident.normalized_value from public.person_identifiers ident where ident.person_id=ord.person_id and ident.project_id=ord.project_id and ident.type='phone' order by ident.created_at asc limit 1) phone on true
@@ -108,7 +111,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
      and ($5::uuid[] is null or exists(select 1 from public.commerce_order_items item where item.order_id=event.order_id and item.product_id=any($5)))
     group by phone.normalized_value`,[project.id,from,to,project.timezone,scopedProductsParam]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<{occurred_at:string;amount:string;product_name:string|null;phone:string|null}>(`
-   select event.occurred_at::text occurred_at, event.${effectColumn}::text amount,
+   select event.occurred_at::text occurred_at, event.${stageAmountColumn}::text amount,
      (select product.name from public.commerce_order_items item join public.commerce_products product on product.id=item.product_id where item.order_id=ord.id order by product.name limit 1) product_name,
      phone.normalized_value phone
      from public.normalized_payment_events event
@@ -120,7 +123,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
     order by event.occurred_at desc limit 12`,[project.id,from,to,project.timezone,scopedProductsParam]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<{name:string;sales:number;revenue:string}>(`
    select coalesce(ord.kit_name,product.name) name,count(distinct event.payment_id)::int sales,
-     coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
+     ${stageRevenueAggregate}
      from public.normalized_payment_events event
      join public.commerce_orders ord on ord.id=event.order_id
      join public.commerce_order_items item on item.order_id=event.order_id
@@ -131,7 +134,7 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
     group by coalesce(ord.kit_name,product.name) order by sales desc`,[project.id,from,to,project.timezone,scopedProductsParam]).then(r=>r.rows).catch(()=>[]),
   database.pool.query<{method:string|null;sales:number;revenue:string}>(`
    select payment.method,count(distinct event.payment_id)::int sales,
-     coalesce(sum(event.${effectColumn}) filter(where event.sale_financial_effect>0),0)::text revenue
+     ${stageRevenueAggregate}
      from public.normalized_payment_events event
      join public.payments payment on payment.id=event.payment_id
     where event.project_id=$1 and event.data_scope='production' and event.sale_financial_effect>0
