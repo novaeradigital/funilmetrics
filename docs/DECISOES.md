@@ -2499,3 +2499,10 @@ Decisão: criar o provedor Kiwify espelhando a Ticto (D-176), com as adaptaçõe
 4. Eventos: order_approved gera Purchase; order_refunded e chargeback geram Refund com reversão; billet_created e pix_created só registram o pedido pendente; order_rejected registra cancelamento; subscription_renewed entra pelo status do pedido; subscription_canceled e subscription_late ficam em quarentena nesta versão; carrinho abandonado (formato próprio, sem webhook_event_type) também fica fora.
 5. Valores em centavos como string (Commissions.charge_amount), comissão do produtor em my_commission; o elo com o visitante é o TrackingParameters.sck no formato fmt_, mesmo desenho da Lastlink e da Ticto.
 6. Correção herdada pela prova de fumaça: o identificador de CPF usa o tipo 'document' do enum identifier_type (o valor 'cpf' não existe); a correção vale também para o normalizador da Ticto, que tinha o mesmo defeito latente.
+
+## D-178 - Salvamento de layout do Dashboard V2 com trava de versao e confirmacao visivel (2026-11-06)
+
+1. Contexto provado no mesmo dia: o salvamento de layout substituia a grade inteira em silencio e falhas nao apareciam em tela nenhuma (o status vinha na URL e ninguem lia). Resultado pratico: salvamentos reestruturaram a grade sem o usuario perceber e uma edicao inteira se perdeu sem registro no servidor.
+2. Trava de conflito: a pagina entrega ao editor a versao da grade (updated_at da versao rascunho); o salvamento so e aceito se a base enviada for igual a versao atual no banco, comparada dentro da transacao com a linha travada. Base velha resulta em recusa com o status layout-conflict, sem tocar na grade.
+3. Confirmacao real: sucesso, conflito, layout invalido, falha e falta de permissao voltam como status na URL de retorno (preservando os filtros) e a tela mostra a faixa correspondente. O editor nao sai mais do modo de edicao por conta propria ao enviar.
+4. A auditoria dashboard_v2_layout_updated segue como estava, um registro por salvamento aceito.

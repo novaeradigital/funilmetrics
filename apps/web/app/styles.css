@@ -6407,3 +6407,7 @@ body:has(.manager-column-resizer:active){cursor:col-resize;user-select:none}
 .ma-filterbar button.ma-pill { background: rgb(255 255 255 / 4%); color: inherit; }
 .ma-filterbar button.ma-apply { background: #24d689; color: #04120b; }
 .ma-filterbar .ma-pill select, .ma-filterbar .ma-pill input { line-height: 1.2; }
+
+.v2-save-status{border-radius:8px;font-size:12px;margin:0 0 12px;padding:10px 14px}
+.v2-save-status-ok{background:#123324;border:1px solid #1f7a4d;color:#7fe7b2}
+.v2-save-status-error{background:#3a1717;border:1px solid #8a3232;color:#f3a3a3}

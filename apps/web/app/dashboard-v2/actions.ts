@@ -49,11 +49,17 @@ function parseLayout(value:FormDataEntryValue|null):LayoutRow[]|null{
 }
 
 export async function saveDashboardV2Layout(formData:FormData){
- const rows=parseLayout(formData.get("layout"));if(!rows)redirect("/dashboard-v2?status=layout-invalid");
+ const returnToRaw=String(formData.get("return_to")??"/dashboard-v2");
+ const returnTo=returnToRaw.startsWith("/dashboard-v2")?returnToRaw:"/dashboard-v2";
+ const suffix=returnTo.includes("?")?"&":"?";
+ const back=(status:string)=>`${returnTo}${suffix}status=${status}`;
+ const rows=parseLayout(formData.get("layout"));if(!rows)redirect(back("layout-invalid"));
  const supabase=await createClient(),{data}=await supabase.auth.getUser();if(!data.user)redirect("/login");
  const {project}=await getActiveProject(data.user.id);if(!project)redirect("/dashboard/projetos");
- if(!new Set(["owner","administrator","editor"]).has(project.role))redirect("/dashboard-v2?status=forbidden");
+ if(!new Set(["owner","administrator","editor"]).has(project.role))redirect(back("forbidden"));
+ const base=String(formData.get("layout_base")??"");
  const database=getDatabase(),client=await database.pool.connect();
+ let outcome="layout-saved";
  try{
   await client.query("begin");await client.query("select pg_advisory_xact_lock(hashtext($1))",[`dashboard-v2:${project.id}`]);
   const actor=(await client.query<{id:string}>(`select id from public.users where auth_user_id=$1 and status='active' limit 1`,[data.user.id])).rows[0];
@@ -61,16 +67,21 @@ export async function saveDashboardV2Layout(formData:FormData){
   let dashboard=(await client.query<{id:string}>(`select id from public.dashboards where project_id=$1 and status='active' and description=$2 order by created_at limit 1`,[project.id,marker])).rows[0];
   if(!dashboard){dashboard=(await client.query<{id:string}>(`insert into public.dashboards(organization_id,project_id,name,description,default_period_days,created_by_user_id) values($1,$2,'Visão geral',$3,30,$4) returning id`,[project.organization_id,project.id,marker,actor.id])).rows[0];}
   if(!dashboard)throw new Error("dashboard");
-  let draft=(await client.query<{id:string}>(`select id from public.dashboard_versions where dashboard_id=$1 and status='draft' for update`,[dashboard.id])).rows[0];
-  if(!draft){const next=(await client.query<{next:number}>(`select coalesce(max(version_number),0)+1 next from public.dashboard_versions where dashboard_id=$1`,[dashboard.id])).rows[0]?.next??1;draft=(await client.query<{id:string}>(`insert into public.dashboard_versions(organization_id,project_id,dashboard_id,version_number,status,title,description,global_filters,created_by_user_id) values($1,$2,$3,$4,'draft','Visão geral',$5,'{}'::jsonb,$6) returning id`,[project.organization_id,project.id,dashboard.id,next,marker,actor.id])).rows[0];}
+  let draft=(await client.query<{id:string;version:string}>(`select id,updated_at::text version from public.dashboard_versions where dashboard_id=$1 and status='draft' for update`,[dashboard.id])).rows[0];
+  if(!draft){const next=(await client.query<{next:number}>(`select coalesce(max(version_number),0)+1 next from public.dashboard_versions where dashboard_id=$1`,[dashboard.id])).rows[0]?.next??1;const created=(await client.query<{id:string}>(`insert into public.dashboard_versions(organization_id,project_id,dashboard_id,version_number,status,title,description,global_filters,created_by_user_id) values($1,$2,$3,$4,'draft','Visão geral',$5,'{}'::jsonb,$6) returning id`,[project.organization_id,project.id,dashboard.id,next,marker,actor.id])).rows[0];if(!created)throw new Error("draft");draft={id:created.id,version:""};}
   if(!draft)throw new Error("draft");
+  if(base&&draft.version&&base!==draft.version){outcome="layout-conflict";await client.query("rollback");}
+  else{
   const existing=(await client.query<{id:string;instance_id:string}>(`select id,coalesce(config->>'v2InstanceId',config->>'v2Kind') instance_id from public.dashboard_widgets where dashboard_version_id=$1`,[draft.id])).rows;
   for(const widget of existing)if(!rows.some(row=>row.id===widget.instance_id))await client.query(`delete from public.dashboard_widgets where id=$1 and dashboard_version_id=$2`,[widget.id,draft.id]);
   for(const row of rows){const definition={v2Kind:row.kind,v2InstanceId:row.id,...row.config},title=row.config.title??row.kind;const found=existing.find(widget=>widget.instance_id===row.id);if(found)await client.query(`update public.dashboard_widgets set title=$3,config=$4::jsonb,grid_x=$5,grid_y=$6,grid_width=$7,grid_height=$8,display_order=$9,updated_at=now() where id=$1 and dashboard_version_id=$2`,[found.id,draft.id,title,JSON.stringify(definition),row.gridX,row.gridY,row.gridWidth,row.gridHeight,row.displayOrder]);else await client.query(`insert into public.dashboard_widgets(organization_id,project_id,dashboard_version_id,widget_type,title,metric_key,config,grid_x,grid_y,grid_width,grid_height,display_order) values($1,$2,$3,'note',$4,null,$5::jsonb,$6,$7,$8,$9,$10)`,[project.organization_id,project.id,draft.id,title,JSON.stringify(definition),row.gridX,row.gridY,row.gridWidth,row.gridHeight,row.displayOrder]);}
+  await client.query(`update public.dashboard_versions set updated_at=now() where id=$1`,[draft.id]);
   await client.query(`insert into public.audit_logs(organization_id,project_id,actor_user_id,action,target_type,target_id,after) values($1,$2,$3,'dashboard_v2_layout_updated','dashboard',$4,$5::jsonb)`,[project.organization_id,project.id,actor.id,dashboard.id,JSON.stringify({widgets:rows.map(row=>({id:row.id,kind:row.kind})),configurationVersion:1})]);
   await client.query("commit");
- }catch(error){await client.query("rollback");console.error("dashboard_v2_layout_save_failed",error);redirect("/dashboard-v2?status=layout-failed")}finally{client.release()}
+  }
+ }catch(error){await client.query("rollback").catch(()=>undefined);console.error("dashboard_v2_layout_save_failed",error);redirect(back("layout-failed"))}finally{client.release()}
  revalidatePath("/dashboard-v2");
+ redirect(back(outcome));
 }
 
 export async function saveDashboardV2Template(formData:FormData){

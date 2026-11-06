@@ -13,7 +13,7 @@ import {queueMetaSyncIfStale,queueQuickMetaSync} from "../../lib/meta-sync-queue
 import {intersectScope,loadBusinessProjects,loadBusinessScope,resolveBusinessProjectId} from "../../lib/business-projects";
 import {UF_NAMES} from "../dashboard/dashboard-inteligente/brazil-map-data";
 
-type Search={from?:string;to?:string;account?:string;projeto?:string;product?:string|string[];channel?:string;medium?:string;offer?:string;payment_method?:string;payment_status?:string;buyer?:string;compare?:string;basis?:string};
+type Search={status?:string;from?:string;to?:string;account?:string;projeto?:string;product?:string|string[];channel?:string;medium?:string;offer?:string;payment_method?:string;payment_status?:string;buyer?:string;compare?:string;basis?:string};
 type Option={id:string;name:string};
 type Ranked={name:string;value:number;amount?:number};
 type SavedWidget={instanceId:string;kind:string;title:string;config:Record<string,unknown>;grid_x:number;grid_y:number;grid_width:number;grid_height:number;display_order:number};
@@ -170,12 +170,14 @@ export default async function DashboardV2Page({searchParams}:{searchParams:Promi
  const methodSales=groupMethodSales(methodSaleRows.map(row=>({method:row.method,sales:row.sales,revenue:Number(row.revenue)})));
  const methodApproval=groupMethodApproval(methodAttemptRows);
  const intelligent={adPerformance,organic,regions,regionData,salesWithoutPhone,recentSales,productDonut,methodSales,methodApproval};
+ const layoutVersionRow=await database.pool.query<{version:string}>(`select version.updated_at::text version from public.dashboards dashboard join public.dashboard_versions version on version.dashboard_id=dashboard.id and version.status='draft' where dashboard.project_id=$1 and dashboard.status='active' and dashboard.description='[funil-metrics:dashboard-v2]' order by version.version_number limit 1`,[project.id]).then(r=>r.rows[0]).catch(()=>undefined);
+ const layoutVersion=layoutVersionRow?.version??"";
  return <main className="app-layout"><DashboardSidebar activeHref="/dashboard-v2" footerLabel="Dados conectados"/>
   <section className="app-content"><DashboardV2Client project={{id:project.id,name:project.name,currency:project.currency,timezone:project.timezone}}
    filters={{from,to,account:effectiveAccounts.join(","),product:effectiveProducts.join(","),projeto:businessId??"",channel:query.channel??"",medium:query.medium??"",offer:query.offer??"",payment_method:query.payment_method??"",payment_status:query.payment_status??"",buyer:buyerSegment??"",compare:query.compare??"previous",basis:revenueBasis}}
    accounts={businessScope?accounts.filter(item=>businessScope.accountIds.includes(item.id)):accounts} products={businessScope?products.filter(item=>businessScope.productIds.includes(item.id)):products} businessProjects={businessProjects} metrics={metrics} previousMetrics={previousMetrics} series={series}
    advancedOptions={{offers,media,paymentMethods,paymentStatuses}}
-   savedWidgets={savedWidgets} savedTemplates={savedTemplates}
+   savedWidgets={savedWidgets} savedTemplates={savedTemplates} layoutVersion={layoutVersion} saveStatus={query.status??""}
    rankings={{accountSpend:accountSpend as Ranked[],channels:channels as Ranked[],hours:hours as Ranked[],accountProfit}} intelligent={intelligent}/>
   </section></main>;
 }
