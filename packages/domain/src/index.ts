@@ -75,3 +75,14 @@ export const CREATIVE_MEDIA_POLICY_V1={
 } as const;
 
 export type CreativeMediaMime=keyof typeof CREATIVE_MEDIA_POLICY_V1.formats;
+
+/**
+ * Nome de exibição de um criativo criado a partir de um arquivo:
+ * o nome do arquivo sem a extensão final. Arquivo sem extensão,
+ * ou cujo nome viraria vazio ao tirar a extensão, mantém o original.
+ */
+export function creativeDisplayNameFromFileName(fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  if (dot <= 0) return fileName;
+  return fileName.slice(0, dot);
+}

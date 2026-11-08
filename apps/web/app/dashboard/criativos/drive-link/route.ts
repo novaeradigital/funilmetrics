@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { creativeDisplayNameFromFileName } from "@funil-metrics/domain";
 import { getActiveProject } from "../../../../lib/active-project";
 import { getDatabase } from "../../../../lib/database";
 import { createClient } from "../../../../lib/supabase/server";
@@ -224,7 +225,7 @@ export async function POST(request: Request) {
          (id, job_id, organization_id, project_id, source, display_name,
           drive_file_id, status)
        values ($1, $2, $3, $4, 'drive_link', $5, $6, 'pending')`,
-      [randomUUID(), jobId, project.organization_id, project.id, item.name, item.driveFileId],
+      [randomUUID(), jobId, project.organization_id, project.id, creativeDisplayNameFromFileName(item.name), item.driveFileId],
     );
   }
   return NextResponse.json({

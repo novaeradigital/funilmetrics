@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
-import { CREATIVE_MEDIA_POLICY_V1 } from "@funil-metrics/domain";
+import { CREATIVE_MEDIA_POLICY_V1, creativeDisplayNameFromFileName } from "@funil-metrics/domain";
 import { getActiveProject } from "../../../../lib/active-project";
 import { getDatabase } from "../../../../lib/database";
 import {
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
           jobId,
           project.organization_id,
           project.id,
-          name,
+          creativeDisplayNameFromFileName(name),
           format.outputMime,
           buffer.length,
           key,

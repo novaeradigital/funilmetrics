@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialRoles, PRODUCT_NAME } from "./index.js";
+import { creativeDisplayNameFromFileName, initialRoles, PRODUCT_NAME } from "./index.js";
 
 describe("domínio compartilhado", () => {
   it("expõe o nome oficial do produto", () => {
@@ -26,5 +26,21 @@ describe("política de mídia",()=>{
     expect(CREATIVE_MEDIA_POLICY_V1.formats["text/plain"].maxBytes).toBe(10*1024**2);
     expect(CREATIVE_MEDIA_POLICY_V1.execution.maxFiles).toBe(1_000);
     expect(CREATIVE_MEDIA_POLICY_V1.execution.maxBytes).toBe(20*1024**3);
+  });
+});
+
+describe("nome de exibição do criativo", () => {
+  it("nasce sem a extensão do arquivo", () => {
+    expect(creativeDisplayNameFromFileName("ad-fabio.mp4")).toBe("ad-fabio");
+    expect(creativeDisplayNameFromFileName("foto.PNG")).toBe("foto");
+  });
+
+  it("tira só a extensão final", () => {
+    expect(creativeDisplayNameFromFileName("ad.final.v2.mp4")).toBe("ad.final.v2");
+  });
+
+  it("mantém o nome quando não há extensão ou ela esvaziaria o nome", () => {
+    expect(creativeDisplayNameFromFileName("arquivo")).toBe("arquivo");
+    expect(creativeDisplayNameFromFileName(".mp4")).toBe(".mp4");
   });
 });

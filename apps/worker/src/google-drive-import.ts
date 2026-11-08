@@ -5,7 +5,7 @@ import { once } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type pg from "pg";
-import {CREATIVE_MEDIA_POLICY_V1,type CreativeMediaMime} from "@funil-metrics/domain";
+import {CREATIVE_MEDIA_POLICY_V1,creativeDisplayNameFromFileName,type CreativeMediaMime} from "@funil-metrics/domain";
 import { loadClamAvConfig, scanStreamWithClamAv } from "./clamav-scanner.js";
 import { getGoogleAccessToken } from "./google-drive-inventory.js";
 import {
@@ -325,7 +325,7 @@ export async function processGoogleDriveImport(pool: pg.Pool) {
           [
             candidate.organization_id,
             candidate.project_id,
-            candidate.name,
+            creativeDisplayNameFromFileName(candidate.name),
             candidate.requested_by_user_id,
           ],
         );
