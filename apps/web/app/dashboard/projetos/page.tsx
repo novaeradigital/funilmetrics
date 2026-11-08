@@ -5,6 +5,7 @@ import {getActiveProject} from "../../../lib/active-project";
 import {signOut} from "../actions";
 import {createProject,selectProject,updateProject} from "./actions";
 import {createBusinessProject,deleteBusinessProject,renameBusinessProject} from "./business-actions";
+import {ProjectCard} from "./project-card";
 import {loadBusinessProjects} from "../../../lib/business-projects";
 import {getDatabase} from "../../../lib/database";
 import {DashboardSidebar} from "../dashboard-sidebar";
@@ -74,27 +75,20 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
       const conexoesN=bizConnections.filter((c)=>c.business_project_id===item.id).length;
       const produtosN=bizProducts.filter((pr)=>pr.effective_id===item.id).length;
       const criativosN=bizCreatives.filter((cr)=>cr.effective_id===item.id).length;
-      return <article className="integration-config-card" key={item.id}>
-      <div><p className="panel-label"><Link href={`/dashboard/projetos/${item.id}`}>{item.name}</Link></p></div>
-      <p>{contasN} conta(s) · {conexoesN} conexão(ões) · {produtosN} produto(s) · {criativosN} criativo(s)</p>
-      <p><Link href={`/dashboard/projetos/${item.id}`}>Abrir projeto e associar itens</Link></p>
-      {canManageActive?<>
-        <form action={renameBusinessProject} className="inline-filter-form">
-          <input name="business_id" type="hidden" value={item.id}/>
-          <label>Renomear<input defaultValue={item.name} name="name" required/></label>
-          <button type="submit">Salvar nome</button>
-        </form>
-        <form action={deleteBusinessProject}>
-          <input name="business_id" type="hidden" value={item.id}/>
-          <button className="secondary-button" type="submit">Excluir projeto</button>
-        </form>
-      </>:null}
-    </article>})}
-    {bizUnassigned?<article className="integration-config-card">
-      <div><p className="panel-label"><Link href="/dashboard/projetos/sem-projeto">Sem projeto</Link></p></div>
-      <p>{bizUnassigned.accounts} conta(s) · {bizUnassigned.connections} conexão(ões) · {bizUnassigned.products} produto(s) · {bizUnassigned.creatives} criativo(s)</p>
-      <p><Link href="/dashboard/projetos/sem-projeto">Distribuir os itens sem projeto</Link></p>
-    </article>:null}</div>
+      return <ProjectCard key={item.id} id={item.id} name={item.name} canManage={canManageActive}
+        counts={{contas:contasN, conexoes:conexoesN, produtos:produtosN, criativos:criativosN}}
+        renameAction={renameBusinessProject} deleteAction={deleteBusinessProject}/>;
+    })}
+    {bizUnassigned&&(bizUnassigned.accounts+bizUnassigned.connections+bizUnassigned.products+bizUnassigned.creatives)>0?<article className="integration-config-card"><Link href="/dashboard/projetos/sem-projeto" style={{textDecoration:"none", color:"inherit", display:"block"}}>
+      <div><p className="panel-label">Sem projeto</p></div>
+      <ul style={{listStyle:"none", margin:"10px 0 2px", padding:0, display:"grid", gap:3}}>
+        <li>{bizUnassigned.accounts} {bizUnassigned.accounts===1?"conta":"contas"}</li>
+        <li>{bizUnassigned.connections} {bizUnassigned.connections===1?"conexão":"conexões"}</li>
+        <li>{bizUnassigned.products} {bizUnassigned.products===1?"produto":"produtos"}</li>
+        <li>{bizUnassigned.creatives} {bizUnassigned.creatives===1?"criativo":"criativos"}</li>
+      </ul>
+      <p>Distribuir os itens sem projeto</p>
+    </Link></article>:null}</div>
     <p className="dashboard-context">A associação de contas, conexões, produtos, pastas e criativos vive dentro da tela de cada projeto. O que ficar sem projeto aparece em Todos os projetos e em nenhum projeto específico.</p>
     </section>:null}
     {project&&canManageActive?<section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Projeto ativo</p><h2>Configurações</h2></div></div>
