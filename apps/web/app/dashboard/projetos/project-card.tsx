@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type Counts = { contas: number; conexoes: number; produtos: number; criativos: number };
+type Counts = { contas: number; conexoesNomes: string[]; produtosNomes: string[]; criativos: number };
 type Action = (data: FormData) => Promise<void>;
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -70,11 +70,15 @@ export function ProjectCard({ id, name, counts, canManage, renameAction, deleteA
           <button type="button" className="secondary-button" onClick={() => setRenaming(false)}>Cancelar</button>
         </form>
       ) : (
-        <ul style={{ listStyle: "none", margin: "10px 0 2px", padding: 0, display: "grid", gap: 3 }}>
-          <li>{plural(counts.contas, "conta", "contas")}</li>
-          <li>{plural(counts.conexoes, "conexão", "conexões")}</li>
-          <li>{plural(counts.produtos, "produto", "produtos")}</li>
-          <li>{plural(counts.criativos, "criativo", "criativos")}</li>
+        <ul style={{ listStyle: "none", margin: "8px 0 2px", padding: 0, display: "grid", gap: 1, lineHeight: 1.45 }}>
+          <li style={{ border: 0, background: "transparent", padding: 0, margin: 0 }}>{plural(counts.contas, "conta", "contas")}</li>
+          {counts.conexoesNomes.length > 0
+            ? counts.conexoesNomes.map((nome) => <li key={nome} style={{ border: 0, background: "transparent", padding: 0, margin: 0 }}>{nome}</li>)
+            : <li style={{ border: 0, background: "transparent", padding: 0, margin: 0 }}>0 conexões</li>}
+          {counts.produtosNomes.length > 0
+            ? counts.produtosNomes.map((nome) => <li key={nome} style={{ border: 0, background: "transparent", padding: 0, margin: 0 }}>{nome}</li>)
+            : <li style={{ border: 0, background: "transparent", padding: 0, margin: 0 }}>0 produtos</li>}
+          <li style={{ border: 0, background: "transparent", padding: 0, margin: 0 }}>{plural(counts.criativos, "criativo", "criativos")}</li>
         </ul>
       )}
     </article>

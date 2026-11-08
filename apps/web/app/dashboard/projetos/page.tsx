@@ -72,20 +72,20 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
     </form>:null}
     <div className="integration-config-grid">{businessProjects.map((item)=>{
       const contasN=bizAccounts.filter((a)=>a.business_project_id===item.id).length;
-      const conexoesN=bizConnections.filter((c)=>c.business_project_id===item.id).length;
-      const produtosN=bizProducts.filter((pr)=>pr.effective_id===item.id).length;
+      const conexoesNomes=bizConnections.filter((c)=>c.business_project_id===item.id).map((c)=>c.name);
+      const produtosNomes=bizProducts.filter((pr)=>pr.effective_id===item.id).map((pr)=>pr.name);
       const criativosN=bizCreatives.filter((cr)=>cr.effective_id===item.id).length;
       return <ProjectCard key={item.id} id={item.id} name={item.name} canManage={canManageActive}
-        counts={{contas:contasN, conexoes:conexoesN, produtos:produtosN, criativos:criativosN}}
+        counts={{contas:contasN, conexoesNomes, produtosNomes, criativos:criativosN}}
         renameAction={renameBusinessProject} deleteAction={deleteBusinessProject}/>;
     })}
     {bizUnassigned&&(bizUnassigned.accounts+bizUnassigned.connections+bizUnassigned.products+bizUnassigned.creatives)>0?<article className="integration-config-card"><Link href="/dashboard/projetos/sem-projeto" style={{textDecoration:"none", color:"inherit", display:"block"}}>
       <div><p className="panel-label">Sem projeto</p></div>
-      <ul style={{listStyle:"none", margin:"10px 0 2px", padding:0, display:"grid", gap:3}}>
-        <li>{bizUnassigned.accounts} {bizUnassigned.accounts===1?"conta":"contas"}</li>
-        <li>{bizUnassigned.connections} {bizUnassigned.connections===1?"conexão":"conexões"}</li>
-        <li>{bizUnassigned.products} {bizUnassigned.products===1?"produto":"produtos"}</li>
-        <li>{bizUnassigned.creatives} {bizUnassigned.creatives===1?"criativo":"criativos"}</li>
+      <ul style={{listStyle:"none", margin:"8px 0 2px", padding:0, display:"grid", gap:1, lineHeight:1.45}}>
+        <li style={{border:0, background:"transparent", padding:0, margin:0}}>{bizUnassigned.accounts} {bizUnassigned.accounts===1?"conta":"contas"}</li>
+        <li style={{border:0, background:"transparent", padding:0, margin:0}}>{bizUnassigned.connections} {bizUnassigned.connections===1?"conexão":"conexões"}</li>
+        <li style={{border:0, background:"transparent", padding:0, margin:0}}>{bizUnassigned.products} {bizUnassigned.products===1?"produto":"produtos"}</li>
+        <li style={{border:0, background:"transparent", padding:0, margin:0}}>{bizUnassigned.creatives} {bizUnassigned.creatives===1?"criativo":"criativos"}</li>
       </ul>
       <p>Distribuir os itens sem projeto</p>
     </Link></article>:null}</div>
