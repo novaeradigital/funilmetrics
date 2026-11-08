@@ -59,13 +59,7 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
     {params.status==="business-deleted"?<div className="notice notice-success">Projeto de negócio excluído. As associações dele foram desfeitas e os itens voltaram para Sem projeto.</div>:null}
     {params.status==="business-duplicate"?<div className="notice notice-error">Já existe um projeto de negócio com esse nome neste projeto.</div>:null}
     {params.status==="business-invalid"?<div className="notice notice-error">Revise os dados do projeto de negócio.</div>:null}
-    <div className="integration-config-grid">{projects.map((item)=><article className="integration-config-card" key={item.id}>
-      <div><p className="panel-label">{item.name}</p><span className={item.id===project?.id?"configured":""}>{item.id===project?.id?"ATUAL":item.role}</span></div>
-      <p>Organização: {item.organization_name}</p>
-      <p>Moeda: {item.currency} · Fuso: {item.timezone}</p><small>{item.slug}</small>
-      {item.id!==project?.id?<form action={selectProject}><input name="project_id" type="hidden" value={item.id}/><input name="return_to" type="hidden" value="/dashboard"/><button>Selecionar projeto</button></form>:null}
-    </article>)}</div>
-    {project?<section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Projetos de negócio</p><h2>Agrupar contas, produtos e criativos por operação</h2><p className="dashboard-context">O projeto de negócio é um rótulo de leitura: ele diz o que é de cada operação para o Dashboard e o Melhores Anúncios filtrarem sem misturar os números. Não separa dados, integrações nem sincronizações, e vale também para o histórico. O que ficar sem projeto aparece em Todos os projetos e em nenhum projeto específico.</p></div></div>
+    {project?<section className="dashboard-panel"><div className="panel-heading"><div><h2>Agrupar contas, produtos e criativos por operação</h2></div></div>
     {canManageActive?<form action={createBusinessProject} className="inline-filter-form">
       <label>Nome do projeto<input name="name" placeholder="Ex.: Alivzon" required/></label>
       <button type="submit">Criar projeto de negócio</button>
@@ -89,9 +83,8 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
       </ul>
       <p>Distribuir os itens sem projeto</p>
     </Link></article>:null}</div>
-    <p className="dashboard-context">A associação de contas, conexões, produtos, pastas e criativos vive dentro da tela de cada projeto. O que ficar sem projeto aparece em Todos os projetos e em nenhum projeto específico.</p>
     </section>:null}
-    {project&&canManageActive?<section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Projeto ativo</p><h2>Configurações</h2></div></div>
+    {project&&canManageActive?<section className="dashboard-panel"><div className="panel-heading"><div><h2>Configurações</h2></div></div>
       <form action={updateProject} className="integration-config-grid">
         <input name="project_id" type="hidden" value={project.id}/>
         <label>Nome<input defaultValue={project.name} name="name" required/></label>
