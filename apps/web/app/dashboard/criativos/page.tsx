@@ -421,7 +421,7 @@ export default async function CreativesPage({ searchParams }: PageProps) {
               version.source_modified_at, coalesce(folder.name, '') as folder_name,
               creative.folder_id::text as creative_folder_id,
               cfolder.name as creative_folder_name,
-              creative.business_project_id::text as business_project_id,
+              coalesce(creative.business_project_id, cfolder.business_project_id)::text as business_project_id,
               business.name as business_project_name,
               count(*) over()::text total_count
          from public.creatives creative
@@ -431,7 +431,7 @@ export default async function CreativesPage({ searchParams }: PageProps) {
          left join public.drive_files file on file.id = version.source_drive_file_id
          left join public.drive_folders folder on folder.id = file.drive_folder_id
          left join public.creative_folders cfolder on cfolder.id = creative.folder_id
-         left join public.business_projects business on business.id = creative.business_project_id
+         left join public.business_projects business on business.id = coalesce(creative.business_project_id, cfolder.business_project_id)
         where creative.project_id = $1
           and asset.malware_status = 'clean'
           and asset.available_at is not null
@@ -448,8 +448,8 @@ export default async function CreativesPage({ searchParams }: PageProps) {
             ($8 = 'none' and creative.folder_id is null) or
             creative.folder_id::text = $8)
           and ($9::text = '' or
-            ($9 = 'none' and creative.business_project_id is null) or
-            creative.business_project_id::text = $9)
+            ($9 = 'none' and coalesce(creative.business_project_id, cfolder.business_project_id) is null) or
+            coalesce(creative.business_project_id, cfolder.business_project_id)::text = $9)
         order by creative.updated_at desc
         limit $6 offset $7`,
       [summary.project_id,search,creativeStatus,mediaType,folderFilter||null,

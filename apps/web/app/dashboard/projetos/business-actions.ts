@@ -76,6 +76,7 @@ const targetTables = {
   connection: "public.connections",
   product: "public.commerce_products",
   creative: "public.creatives",
+  folder: "public.creative_folders",
 } as const;
 
 export async function assignBusinessProject(data: FormData) {

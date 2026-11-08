@@ -1,9 +1,10 @@
+import Link from "next/link";
 import {redirect} from "next/navigation";
 import {createClient} from "../../../lib/supabase/server";
 import {getActiveProject} from "../../../lib/active-project";
 import {signOut} from "../actions";
 import {createProject,selectProject,updateProject} from "./actions";
-import {assignBusinessProject,createBusinessProject,deleteBusinessProject,renameBusinessProject} from "./business-actions";
+import {createBusinessProject,deleteBusinessProject,renameBusinessProject} from "./business-actions";
 import {loadBusinessProjects} from "../../../lib/business-projects";
 import {getDatabase} from "../../../lib/database";
 import {DashboardSidebar} from "../dashboard-sidebar";
@@ -36,11 +37,12 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
   const bizAccounts=project?(await database.pool.query<BizAccount>(`select id,name,business_project_id::text as business_project_id from public.meta_ad_accounts where project_id=$1 order by name`,[project.id])).rows:[];
   const bizConnections=project?(await database.pool.query<BizConnection>(`select connection.id,connection.provider,connection.name,connection.business_project_id::text as business_project_id from public.connections connection where connection.project_id=$1 and (connection.provider in ('lastlink','configcheckout') or exists(select 1 from public.commerce_orders orders where orders.connection_id=connection.id)) order by connection.provider,connection.name`,[project.id])).rows:[];
   const bizProducts=project?(await database.pool.query<BizProduct>(`select product.id,product.name,connection.name as connection_name,product.business_project_id::text as override_id,coalesce(product.business_project_id,connection.business_project_id)::text as effective_id from public.commerce_products product join public.connections connection on connection.id=product.connection_id where product.project_id=$1 and product.data_scope='production' order by product.name`,[project.id])).rows:[];
+  const bizCreatives=project?(await database.pool.query<{effective_id:string|null}>(`select coalesce(creative.business_project_id,folder.business_project_id)::text as effective_id from public.creatives creative left join public.creative_folders folder on folder.id=creative.folder_id where creative.project_id=$1`,[project.id])).rows:[] as {effective_id:string|null}[];
   const bizUnassigned=project?(await database.pool.query<{accounts:number;connections:number;products:number;creatives:number}>(`select
     (select count(*)::int from public.meta_ad_accounts where project_id=$1 and business_project_id is null) as accounts,
     (select count(*)::int from public.connections connection where connection.project_id=$1 and connection.business_project_id is null and (connection.provider in ('lastlink','configcheckout') or exists(select 1 from public.commerce_orders orders where orders.connection_id=connection.id))) as connections,
     (select count(*)::int from public.commerce_products product join public.connections connection on connection.id=product.connection_id where product.project_id=$1 and product.data_scope='production' and coalesce(product.business_project_id,connection.business_project_id) is null) as products,
-    (select count(*)::int from public.creatives where project_id=$1 and business_project_id is null) as creatives`,[project.id])).rows[0]:undefined;
+    (select count(*)::int from public.creatives creative left join public.creative_folders folder on folder.id=creative.folder_id where creative.project_id=$1 and coalesce(creative.business_project_id,folder.business_project_id) is null) as creatives`,[project.id])).rows[0]:undefined;
   const businessNameById=new Map(businessProjects.map((item)=>[item.id,item.name]));
   const providerLabels:Record<string,string>={lastlink:"Lastlink",configcheckout:"Checkout próprio"};
   return <main className="app-layout"><DashboardSidebar activeHref="/dashboard/projetos" footerLabel="Isolamento por projeto"/>
@@ -50,7 +52,7 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
     {params.status==="invalid"?<div className="notice notice-error">Revise nome, moeda e fuso horário.</div>:null}
     {params.status==="error"?<div className="notice notice-error">Não foi possível criar o projeto. Tente novamente.</div>:null}
     {params.status==="updated"?<div className="notice notice-success">Configurações do projeto atualizadas e registradas na auditoria.</div>:null}
-    {params.status==="business-created"?<div className="notice notice-success">Projeto de negócio criado. Associe as contas, conexões e produtos na seção abaixo.</div>:null}
+    {params.status==="business-created"?<div className="notice notice-success">Projeto de negócio criado. Abra o projeto para associar contas, conexões, produtos e criativos.</div>:null}
     {params.status==="business-assigned"?<div className="notice notice-success">Associação salva. Os filtros já valem com a nova divisão, inclusive no histórico.</div>:null}
     {params.status==="business-renamed"?<div className="notice notice-success">Projeto de negócio renomeado.</div>:null}
     {params.status==="business-deleted"?<div className="notice notice-success">Projeto de negócio excluído. As associações dele foram desfeitas e os itens voltaram para Sem projeto.</div>:null}
@@ -63,7 +65,6 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
       {item.id!==project?.id?<form action={selectProject}><input name="project_id" type="hidden" value={item.id}/><input name="return_to" type="hidden" value="/dashboard"/><button>Selecionar projeto</button></form>:null}
     </article>)}</div>
     {project?<section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Projetos de negócio</p><h2>Agrupar contas, produtos e criativos por operação</h2><p className="dashboard-context">O projeto de negócio é um rótulo de leitura: ele diz o que é de cada operação para o Dashboard e o Melhores Anúncios filtrarem sem misturar os números. Não separa dados, integrações nem sincronizações, e vale também para o histórico. O que ficar sem projeto aparece em Todos os projetos e em nenhum projeto específico.</p></div></div>
-    {bizUnassigned&&(bizUnassigned.accounts+bizUnassigned.connections+bizUnassigned.products+bizUnassigned.creatives)>0?<div className="notice">Sem projeto: {bizUnassigned.accounts} conta(s) de anúncio, {bizUnassigned.connections} conexão(ões) de pagamento, {bizUnassigned.products} produto(s) e {bizUnassigned.creatives} criativo(s). Associe abaixo para os filtros ficarem completos.</div>:null}
     {canManageActive?<form action={createBusinessProject} className="inline-filter-form">
       <label>Nome do projeto<input name="name" placeholder="Ex.: Alivzon" required/></label>
       <button type="submit">Criar projeto de negócio</button>
@@ -72,9 +73,11 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
       const contasN=bizAccounts.filter((a)=>a.business_project_id===item.id).length;
       const conexoesN=bizConnections.filter((c)=>c.business_project_id===item.id).length;
       const produtosN=bizProducts.filter((pr)=>pr.effective_id===item.id).length;
+      const criativosN=bizCreatives.filter((cr)=>cr.effective_id===item.id).length;
       return <article className="integration-config-card" key={item.id}>
-      <div><p className="panel-label">{item.name}</p></div>
-      <p>{contasN} conta(s) · {conexoesN} conexão(ões) · {produtosN} produto(s)</p>
+      <div><p className="panel-label"><Link href={`/dashboard/projetos/${item.id}`}>{item.name}</Link></p></div>
+      <p>{contasN} conta(s) · {conexoesN} conexão(ões) · {produtosN} produto(s) · {criativosN} criativo(s)</p>
+      <p><Link href={`/dashboard/projetos/${item.id}`}>Abrir projeto e associar itens</Link></p>
       {canManageActive?<>
         <form action={renameBusinessProject} className="inline-filter-form">
           <input name="business_id" type="hidden" value={item.id}/>
@@ -86,48 +89,13 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
           <button className="secondary-button" type="submit">Excluir projeto</button>
         </form>
       </>:null}
-    </article>})}</div>
-    <h3>Contas de anúncio</h3>
-    {bizAccounts.map((account)=><div className="folder-admin-row" key={account.id}>
-      <strong>{account.name}</strong>
-      {canManageActive?<form action={assignBusinessProject} className="inline-filter-form">
-        <input name="target" type="hidden" value="account"/>
-        <input name="target_id" type="hidden" value={account.id}/>
-        <label>Projeto<select defaultValue={account.business_project_id??""} name="business_project_id">
-          <option value="">Sem projeto</option>
-          {businessProjects.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}
-        </select></label>
-        <button type="submit">Salvar</button>
-      </form>:<span>{account.business_project_id?(businessNameById.get(account.business_project_id)??"Sem projeto"):"Sem projeto"}</span>}
-    </div>)}
-    <h3>Conexões de pagamento</h3>
-    {bizConnections.map((connection)=><div className="folder-admin-row" key={connection.id}>
-      <strong>{connection.name}</strong><span>{providerLabels[connection.provider]??connection.provider}</span>
-      {canManageActive?<form action={assignBusinessProject} className="inline-filter-form">
-        <input name="target" type="hidden" value="connection"/>
-        <input name="target_id" type="hidden" value={connection.id}/>
-        <label>Projeto<select defaultValue={connection.business_project_id??""} name="business_project_id">
-          <option value="">Sem projeto</option>
-          {businessProjects.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}
-        </select></label>
-        <button type="submit">Salvar</button>
-      </form>:<span>{connection.business_project_id?(businessNameById.get(connection.business_project_id)??"Sem projeto"):"Sem projeto"}</span>}
-    </div>)}
-    <h3>Produtos</h3>
-    <p className="dashboard-context">Produto sem projeto próprio herda o da conexão. Use o campo do produto só para corrigir exceções.</p>
-    {bizProducts.map((product)=><div className="folder-admin-row" key={product.id}>
-      <strong>{product.name}</strong><span>{product.connection_name} · hoje vale {product.effective_id?(businessNameById.get(product.effective_id)??"sem projeto"):"sem projeto"}</span>
-      {canManageActive?<form action={assignBusinessProject} className="inline-filter-form">
-        <input name="target" type="hidden" value="product"/>
-        <input name="target_id" type="hidden" value={product.id}/>
-        <label>Projeto<select defaultValue={product.override_id??""} name="business_project_id">
-          <option value="">Automático (herda da conexão)</option>
-          {businessProjects.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}
-        </select></label>
-        <button type="submit">Salvar</button>
-      </form>:null}
-    </div>)}
-    <p className="dashboard-context">Criativos se associam na Biblioteca: filtro por projeto e campo Projeto em cada cartão. E criativo publicado numa conta herda o projeto dela quando ainda não tem nenhum.</p>
+    </article>})}
+    {bizUnassigned?<article className="integration-config-card">
+      <div><p className="panel-label"><Link href="/dashboard/projetos/sem-projeto">Sem projeto</Link></p></div>
+      <p>{bizUnassigned.accounts} conta(s) · {bizUnassigned.connections} conexão(ões) · {bizUnassigned.products} produto(s) · {bizUnassigned.creatives} criativo(s)</p>
+      <p><Link href="/dashboard/projetos/sem-projeto">Distribuir os itens sem projeto</Link></p>
+    </article>:null}</div>
+    <p className="dashboard-context">A associação de contas, conexões, produtos, pastas e criativos vive dentro da tela de cada projeto. O que ficar sem projeto aparece em Todos os projetos e em nenhum projeto específico.</p>
     </section>:null}
     {project&&canManageActive?<section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Projeto ativo</p><h2>Configurações</h2></div></div>
       <form action={updateProject} className="integration-config-grid">
