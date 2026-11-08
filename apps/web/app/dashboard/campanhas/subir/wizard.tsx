@@ -255,8 +255,6 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
     <CreativeImportPanel folders={folders}/>
     <button type="button" className="secondary-button" onClick={()=>router.refresh()}>Atualizar lista</button>
    </div>
-   <label>Produto<input list="wizard-products" value={productName} onChange={e=>setProductName(e.target.value)}/></label>
-   <datalist id="wizard-products">{products.map(p=><option key={p} value={p}/>)}</datalist>
    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",margin:"10px 0"}}>
     <button type="button" className={!creativeFolder?"period-active":"secondary-button"} onClick={()=>setCreativeFolder("")}>Todas as pastas</button>
     {folders.map(folder=><button key={folder.id} type="button" className={creativeFolder===folder.id?"period-active":"secondary-button"} onClick={()=>setCreativeFolder(folder.id)}>{folder.name}</button>)}
@@ -305,6 +303,8 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
     <label style={{flex:1}}>URL de destino<input style={{width:"100%"}} value={adSet.destinationUrl} onChange={e=>setAdSet(s=>({...s,destinationUrl:e.target.value}))}/></label>
    </div>
    <h3>Nomenclatura</h3>
+   <label style={{display:"block"}}>Produto<input style={{width:"100%"}} list="wizard-products" value={productName} onChange={e=>setProductName(e.target.value)}/></label>
+   <datalist id="wizard-products">{products.map(p=><option key={p} value={p}/>)}</datalist>
    <label style={{display:"block"}}>Campanha<input style={{width:"100%"}} value={naming.campaignPattern} onChange={e=>setNaming(s=>({...s,campaignPattern:e.target.value}))}/></label>
    <label style={{display:"block"}}>Conjunto<input style={{width:"100%"}} value={naming.adSetPattern} onChange={e=>setNaming(s=>({...s,adSetPattern:e.target.value}))}/></label>
    <label style={{display:"block"}}>Anuncio<input style={{width:"100%"}} value={naming.adPattern} onChange={e=>setNaming(s=>({...s,adPattern:e.target.value}))}/></label>
