@@ -452,18 +452,21 @@ export async function processCampaignUploads(pool: pg.Pool) {
             };
           }
           await setStage(item, "Criando o anuncio na Meta");
-          const creative = await graphPost(token, `${act}/adcreatives`, {
+          // Os parametros de URL vivem no url_tags do CRIATIVO (campo
+          // que o Gerenciador exibe no anuncio); no corpo do anuncio a
+          // Graph ignora o url_tags silenciosamente (D-182).
+          const creativeBody: Record<string, unknown> = {
             name: item.name, object_story_spec: storySpec,
-          });
-          const adBody: Record<string, unknown> = {
+          };
+          const urlTags = String(payload.utmQuery ?? "");
+          if (urlTags) creativeBody.url_tags = urlTags;
+          const creative = await graphPost(token, `${act}/adcreatives`, creativeBody);
+          const ad = await graphPost(token, `${act}/ads`, {
             name: item.name,
             adset_id: parent!.external_id,
             creative: { creative_id: String(creative.id) },
             status: "PAUSED",
-          };
-          const urlTags = String(payload.utmQuery ?? "");
-          if (urlTags) adBody.url_tags = urlTags;
-          const ad = await graphPost(token, `${act}/ads`, adBody);
+          });
           await markCreated(item, String(ad.id));
         }
       } catch (error) {

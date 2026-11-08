@@ -2535,3 +2535,6 @@ Decisao: ordenar por item.created_at na consulta de itens da pagina de Publicaco
 
 **Regras.** O utm_content continua sendo a chave da associacao venda-anuncio; com o padrao novo ele carrega nome|id e a associacao passa a nascer certa nas campanhas enviadas pelo Funil. Nenhuma tela usa utm_medium como chave (conferido: ele e apenas dimensao e filtro), entao o meio novo (nome|id do conjunto) nao quebra classificacao nenhuma.
 
+
+**Correcao da D-182 (2026-11-08, madrugada).** A primeira versao gravava o url_tags no corpo de criacao do ANUNCIO, onde a Graph API ignora o campo silenciosamente (o objeto anuncio nem expoe url_tags para leitura). A prova inicial leu o payload local, nao o estado na Meta; quem pegou foi o Willian conferindo o campo "Parametros de URL" vazio no Gerenciador. O url_tags mora no CRIATIVO e so pode ser gravado na criacao dele (atualizar criativo existente com url_tags e recusado pela Meta). O publicador passou a enviar o url_tags no corpo de criacao do criativo. Prova nova, por leitura na Graph API: publicacao de teste 79056a10 criou o anuncio 120254996418430198 (pausado) e o criativo 1916942373022756 leu de volta com o url_tags identico ao padrao e o link de destino limpo.
+
