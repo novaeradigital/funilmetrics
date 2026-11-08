@@ -81,7 +81,7 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
     })}
     {bizUnassigned&&(bizUnassigned.accounts+bizUnassigned.connections+bizUnassigned.products+bizUnassigned.creatives)>0?<article className="integration-config-card"><Link href="/dashboard/projetos/sem-projeto" style={{textDecoration:"none", color:"inherit", display:"block"}}>
       <div><p className="panel-label">Sem projeto</p></div>
-      <ul style={{listStyle:"none", margin:"8px 0 2px", padding:0, display:"grid", gap:1, lineHeight:1.45}}>
+      <ul style={{listStyle:"none", margin:"8px 0 2px", padding:0, display:"grid", gap:1, lineHeight:1.5, fontSize:"0.85rem", color:"var(--fm-text-soft)"}}>
         <li style={{border:0, background:"transparent", padding:0, margin:0}}>{bizUnassigned.accounts} {bizUnassigned.accounts===1?"conta":"contas"}</li>
         <li style={{border:0, background:"transparent", padding:0, margin:0}}>{bizUnassigned.connections} {bizUnassigned.connections===1?"conexão":"conexões"}</li>
         <li style={{border:0, background:"transparent", padding:0, margin:0}}>{bizUnassigned.products} {bizUnassigned.products===1?"produto":"produtos"}</li>
