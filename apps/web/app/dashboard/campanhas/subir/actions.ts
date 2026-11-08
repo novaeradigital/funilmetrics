@@ -5,7 +5,7 @@ import {createClient} from "../../../../lib/supabase/server";
 import {getActiveProject} from "../../../../lib/active-project";
 import {getDatabase} from "../../../../lib/database";
 import {decryptIntegrationSecret,loadIntegrationVaultKey} from "../../../../lib/integration-vault";
-import {expandStructure,resolveNamingPattern,buildUtmQuery,type NamingContext} from "../../../../lib/campaign-naming";
+import {expandStructure,resolveNamingPattern,resolveUtmParams,legacyUtmsToParams,DEFAULT_UTM_PARAMS,type NamingContext} from "../../../../lib/campaign-naming";
 import {loadMetaConnectionAccessToken} from "../../../../lib/meta-oauth";
 
 type Actor={userId:string;projectId:string;organizationId:string};
@@ -31,7 +31,8 @@ type UploadConfig={
  structure:{campaigns:number;adSetsPerCampaign:number;adsPerAdSet:number;duplications:number;distribution:"rotate"|"sequence"|"all"};
  adSet:{objective:string;budgetLevel:"campaign"|"adset";dailyBudget:number;countries:string;ageMin:number;ageMax:number;gender:string;destinationUrl:string};
  naming:{campaignPattern:string;adSetPattern:string;adPattern:string;separator:string;casing:"original"|"upper"|"lower";dateFormat:string};
- utms:Record<string,string>;
+ utmParams?:string;
+ utms?:Record<string,string>;
  copies:{mode:"global"|"per_creative";global?:CopyModel;perCreative?:Record<string,CopyModel>};
  productName:string;
 };
@@ -80,21 +81,15 @@ function buildItems(config:UploadConfig){
       gender:config.adSet.gender,pixelId:destination.pixelId,event:destination.event,
       pageId:destination.pageId,instagramId:destination.instagramId}});
    }
-   const utmTemplate={
-    utm_source:config.utms.utm_source,utm_medium:config.utms.utm_medium,
-    utm_campaign:(config.utms.utm_campaign??"").replaceAll("{campanha}",campaignName),
-    utm_content:(config.utms.utm_content??"").replaceAll("{anuncio}",adName),
-    utm_term:config.utms.utm_term,
-   };
-   const utmQuery=buildUtmQuery(utmTemplate,ctx,namingOpts);
-   const url=utmQuery?`${config.adSet.destinationUrl}${config.adSet.destinationUrl.includes("?")?"&":"?"}${utmQuery}`:config.adSet.destinationUrl;
+   const utmBase=config.utmParams??(config.utms?legacyUtmsToParams(config.utms):DEFAULT_UTM_PARAMS);
+   const utmQuery=resolveUtmParams(utmBase,{...ctx,campanha:campaignName,anuncio:adName},namingOpts);
    const copy=config.copies.mode==="per_creative"
     ? config.copies.perCreative?.[creative.id] ?? config.copies.global ?? null
     : config.copies.global ?? null;
    items.push({account_external_id:destination.accountExternalId,level:"ad",
     name:adName,creative_id:creative.id,parent_key:adSetKey,
     idempotency_key:`${adSetKey}:a${slot.adIndex}:${slot.sequence}`,
-    copy,payload:{destinationUrl:url,utmQuery,pageId:destination.pageId,
+    copy,payload:{destinationUrl:config.adSet.destinationUrl,utmQuery,pageId:destination.pageId,
      instagramId:destination.instagramId,creativeName:creative.name,creativeFormat:creative.format}});
   }
  }

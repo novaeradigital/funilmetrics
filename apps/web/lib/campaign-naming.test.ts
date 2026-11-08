@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildDestinationUrl,
   buildUtmQuery,
+  DEFAULT_UTM_PARAMS,
   expandStructure,
+  legacyUtmsToParams,
   resolveNamingPattern,
+  resolveUtmParams,
   unknownPatternVariables,
 } from "./campaign-naming";
 
@@ -48,6 +51,20 @@ describe("UTMs", () => {
   it("monta a URL final", () => {
     expect(buildDestinationUrl("https://exemplo.com/pagina", { utm_source: "facebook" }, ctx))
       .toBe("https://exemplo.com/pagina?utm_source=facebook");
+  });
+});
+
+describe("Parametros UTMs (campo unico)", () => {
+  it("o padrao novo passa literal, com as macros da Meta intactas", () => {
+    expect(resolveUtmParams(DEFAULT_UTM_PARAMS, ctx)).toBe(DEFAULT_UTM_PARAMS);
+  });
+  it("resolve variaveis do Funil sem tocar nas macros", () => {
+    expect(resolveUtmParams("utm_content={criativo}|{{ad.id}}&utm_campaign={campanha}", { ...ctx, campanha: "Campanha BR" }))
+      .toBe("utm_content=video-depoimento-ana.mp4|{{ad.id}}&utm_campaign=Campanha BR");
+  });
+  it("converte o formato antigo de 5 campos na string unica", () => {
+    expect(legacyUtmsToParams({ utm_source: "facebook", utm_medium: "cpc", utm_campaign: "{campanha}", utm_content: "{criativo}", utm_term: "" }))
+      .toBe("utm_source=facebook&utm_medium=cpc&utm_campaign={campanha}&utm_content={criativo}");
   });
 });
 

@@ -2526,3 +2526,12 @@ Implementacao: funcao unica creativeDisplayNameFromFileName em packages/domain, 
 Contexto provado: a consulta de itens da pagina de Publicacoes ordenava por created_at sem qualificar; desde que a coluna Criativo entrou (join com creatives, que tambem tem created_at), o Postgres recusa a consulta com erro 42702 (column reference "created_at" is ambiguous) e a pagina cai na tela de erro. O envio em si nao era afetado: a publicacao roda fora da pagina e conclui normalmente.
 
 Decisao: ordenar por item.created_at na consulta de itens da pagina de Publicacoes. Regra derivada: em consulta com join, toda coluna de ordenacao e qualificada com o alias da tabela.
+
+## D-182: Parametros UTM em campo unico no url_tags do anuncio
+
+**Contexto.** A venda de 07/11/2026 do Reapaixonar (R$ 368,60) apareceu no dashboard sem associacao a criativo: o dashboard so amarra a venda ao anuncio quando o utm_content carrega o ID numerico do anuncio (extractAdId), e a campanha enviada pelo Funil levava so o nome do criativo, porque o assistente montava os parametros com os modelos {campanha} e {criativo} e concatenava a query no link de destino. A venda de 06/11 so associou porque as tags dela foram ajustadas na mao no Gerenciador com o padrao nome|id.
+
+**Decisao.** Os 5 campos de UTM do assistente e dos modelos de subida viram um unico campo de texto, "Parametros UTMs", editavel livremente. O padrao novo, estilo Metrito/Utmify escolhido pelo Willian, e: utm_source=facebook&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}. As macros {{...}} sao da Meta e vao literais (a Meta resolve no clique); o motor do Funil resolve apenas as variaveis proprias ({criativo}, {campanha}, {anuncio} e as da nomenclatura), sem separador, sem caixa e sem codificacao. Os parametros vao no campo url_tags do anuncio na Meta, NUNCA concatenados no link de destino, que volta a ir limpo. Modelos salvos no formato antigo sao convertidos para a string unica equivalente (2 modelos convertidos em 2026-11-08), e configs antigas seguem aceitas na criacao da subida pela mesma conversao.
+
+**Regras.** O utm_content continua sendo a chave da associacao venda-anuncio; com o padrao novo ele carrega nome|id e a associacao passa a nascer certa nas campanhas enviadas pelo Funil. Nenhuma tela usa utm_medium como chave (conferido: ele e apenas dimensao e filtro), entao o meio novo (nome|id do conjunto) nao quebra classificacao nenhuma.
+

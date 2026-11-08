@@ -455,12 +455,15 @@ export async function processCampaignUploads(pool: pg.Pool) {
           const creative = await graphPost(token, `${act}/adcreatives`, {
             name: item.name, object_story_spec: storySpec,
           });
-          const ad = await graphPost(token, `${act}/ads`, {
+          const adBody: Record<string, unknown> = {
             name: item.name,
             adset_id: parent!.external_id,
             creative: { creative_id: String(creative.id) },
             status: "PAUSED",
-          });
+          };
+          const urlTags = String(payload.utmQuery ?? "");
+          if (urlTags) adBody.url_tags = urlTags;
+          const ad = await graphPost(token, `${act}/ads`, adBody);
           await markCreated(item, String(ad.id));
         }
       } catch (error) {

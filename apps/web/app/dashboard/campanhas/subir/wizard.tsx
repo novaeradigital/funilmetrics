@@ -1,7 +1,7 @@
 "use client";
 import {useMemo,useState,useTransition} from "react";
 import {createUpload,saveTemplate,generateCopies,getDestinationPages,getDestinationPixels,type DestinationPage,type DestinationPixel} from "./actions";
-import {expandStructure,resolveNamingPattern,buildUtmQuery,type NamingContext} from "../../../../lib/campaign-naming";
+import {expandStructure,resolveNamingPattern,resolveUtmParams,legacyUtmsToParams,DEFAULT_UTM_PARAMS,type NamingContext} from "../../../../lib/campaign-naming";
 import {CreativeImportPanel} from "../../criativos/creative-import-panel";
 import {useRouter} from "next/navigation";
 
@@ -32,7 +32,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
  const [structure,setStructure]=useState({campaigns:1,adSetsPerCampaign:3,adsPerAdSet:1,duplications:1,distribution:"rotate" as "rotate"|"sequence"|"all"});
  const [adSet,setAdSet]=useState({objective:"OUTCOME_SALES",budgetLevel:"adset" as "campaign"|"adset",dailyBudget:50,countries:"BR",ageMin:18,ageMax:65,gender:"all",destinationUrl:""});
  const [naming,setNaming]=useState({campaignPattern:"{produto} | {pais} | {data}",adSetPattern:"{publico} | {pais}",adPattern:"{criativo}",separator:"_",casing:"original" as "original"|"upper"|"lower",dateFormat:"YYYYMMDD"});
- const [utms,setUtms]=useState({utm_source:"facebook",utm_medium:"cpc",utm_campaign:"{campanha}",utm_content:"{criativo}",utm_term:""});
+ const [utmParams,setUtmParams]=useState(DEFAULT_UTM_PARAMS);
  const [copyMode,setCopyMode]=useState<"global"|"per_creative">("global");
  const [generated,setGenerated]=useState<Record<string,CopyModel[]>>({});
  const [chosen,setChosen]=useState<Record<string,number>>({});
@@ -96,7 +96,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
   return {produto:productName||undefined,pais:adSet.countries||undefined,data:new Date(),
    conta:accountName,objetivo:adSet.objective,orcamento:adSet.dailyBudget,publico:undefined};
  }
- type PreviewAd={name:string;creative:string;url:string};
+ type PreviewAd={name:string;creative:string;url:string;utmParams:string};
  type PreviewAdSet={name:string;ads:PreviewAd[]};
  type PreviewCampaign={name:string;adSets:PreviewAdSet[]};
  const preview=useMemo(()=>{
@@ -124,11 +124,9 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
    const adSetKey=`${slot.campaignIndex}:${slot.adSetIndex}`;
    let adSetEntry=adSetMap.get(adSetKey);
    if(!adSetEntry){adSetEntry={name:adSetName,ads:[]};adSetMap.set(adSetKey,adSetEntry);campaign.adSets.push(adSetEntry);}
-   const utmQuery=buildUtmQuery({utm_source:utms.utm_source,utm_medium:utms.utm_medium,
-    utm_campaign:utms.utm_campaign.replaceAll("{campanha}",campaignName),
-    utm_content:utms.utm_content.replaceAll("{anuncio}",adName),utm_term:utms.utm_term},ctx,namingOpts);
+   const utmQuery=resolveUtmParams(utmParams,{...ctx,campanha:campaignName,anuncio:adName},namingOpts);
    adSetEntry.ads.push({name:adName,creative:creative.name,
-    url:utmQuery?`${adSet.destinationUrl}${adSet.destinationUrl.includes("?")?"&":"?"}${utmQuery}`:adSet.destinationUrl});
+    url:adSet.destinationUrl,utmParams:utmQuery});
   }
   const campaigns=[...campaignMap.values()];
   return {campaigns,
@@ -138,7 +136,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
    totalCampaigns:campaigns.length*selectedAccounts.length,
    repeatedCreative};
   // eslint-disable-next-line react-hooks/exhaustive-deps
- },[selectedAccounts,selectedCreativeObjs,structure,naming,utms,adSet,productName]);
+ },[selectedAccounts,selectedCreativeObjs,structure,naming,utmParams,adSet,productName]);
 
  function currentConfig(){
   return {
@@ -149,7 +147,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
     return {accountId:account.id,accountExternalId:ext,accountName:account.name,...d};
    }),
    creatives:selectedCreativeObjs.map(c=>({id:c.id,name:c.name,format:c.format,transcript:c.transcript})),
-   structure,adSet,naming,utms,productName,
+   structure,adSet,naming,utmParams,productName,
    copies:{mode:copyMode,
     global:copyMode==="global"?edited["__global"]:undefined,
     perCreative:copyMode==="per_creative"?Object.fromEntries(
@@ -316,25 +314,24 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
      <option value="original">Original</option><option value="upper">Maiusculas</option><option value="lower">Minusculas</option></select></label>
    </div>
    <h3>UTMs</h3>
-   <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-    {([["utm_source","Source"],["utm_medium","Medium"],["utm_campaign","Campaign"],["utm_content","Content"],["utm_term","Term"]] as const).map(([key,label])=>
-     <label key={key}>{label}<input value={utms[key]} onChange={e=>setUtms(s=>({...s,[key]:e.target.value}))}/></label>)}
-   </div>
-   <p>Variaveis aceitas: {"{criativo}"}, {"{campanha}"}, {"{anuncio}"}, {"{produto}"}, {"{data}"} e as demais da nomenclatura.</p>
+   <label style={{display:"block"}}>Parametros UTMs<input style={{width:"100%"}} value={utmParams} onChange={e=>setUtmParams(e.target.value)}/></label>
+   <p>Os parametros vao no campo de parametros de URL (url_tags) do anuncio, nunca no link de destino. Macros da Meta como {"{{ad.id}}"} vao literais e a Meta resolve no clique. Variaveis do Funil aceitas: {"{criativo}"}, {"{campanha}"}, {"{anuncio}"}, {"{produto}"}, {"{data}"} e as demais da nomenclatura.</p>
    {templates.length>0&&<div>
     <h3>Modelos de subida</h3>
     <select defaultValue="" onChange={e=>{
      const template=templates.find(t=>t.id===e.target.value);if(!template)return;
-     const cfg=template.config as {adSet?:typeof adSet;naming?:typeof naming;utms?:typeof utms;structure?:typeof structure};
+     const cfg=template.config as {adSet?:typeof adSet;naming?:typeof naming;utmParams?:string;utms?:Record<string,string>;structure?:typeof structure};
      if(cfg.adSet)setAdSet(cfg.adSet);if(cfg.naming)setNaming(cfg.naming);
-     if(cfg.utms)setUtms(cfg.utms);if(cfg.structure)setStructure(cfg.structure);
+     if(typeof cfg.utmParams==="string")setUtmParams(cfg.utmParams);
+     else if(cfg.utms)setUtmParams(legacyUtmsToParams(cfg.utms));
+     if(cfg.structure)setStructure(cfg.structure);
     }}>
      <option value="">Aplicar modelo...</option>
      {templates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
     </select>
    </div>}
    <form action={saveTemplate} style={{marginTop:12}}>
-    <input type="hidden" name="config" value={JSON.stringify({adSet,naming,utms,structure})}/>
+    <input type="hidden" name="config" value={JSON.stringify({adSet,naming,utmParams,structure})}/>
     <label>Nome do modelo<input name="name" required/></label>
     <button type="submit" className="secondary-button">Salvar como modelo</button>
    </form>
@@ -363,6 +360,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
      {adSetItem.ads.map((ad,adIndex)=><div key={adIndex} style={{marginLeft:16,marginTop:4}}>
       <div>Anuncio: {ad.name} - Criativo: {ad.creative}</div>
       <div style={{wordBreak:"break-all"}}>{ad.url}</div>
+      <div style={{wordBreak:"break-all"}}>Parametros: {ad.utmParams}</div>
      </div>)}
     </div>)}
    </div>)}

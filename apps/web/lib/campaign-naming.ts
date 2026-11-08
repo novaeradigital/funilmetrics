@@ -135,6 +135,49 @@ export function buildUtmQuery(
   return params.toString();
 }
 
+// Parametros UTM em campo unico (D-182): a string inteira vai para o
+// campo url_tags do anuncio na Meta, nunca concatenada no link de
+// destino. As macros {{...}} sao da Meta e passam literais (a Meta
+// resolve no clique); so as variaveis do Funil ({criativo}, {campanha},
+// {anuncio} e as demais da nomenclatura) sao resolvidas na publicacao,
+// sem separador, sem caixa e sem codificacao de URL.
+export const DEFAULT_UTM_PARAMS =
+  "utm_source=facebook&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}";
+
+export function resolveUtmParams(
+  params: string,
+  context: NamingContext & { campanha?: string; anuncio?: string },
+  options: NamingOptions = {},
+): string {
+  const segments = params.split(/(\{\{[^{}]*\}\})/g);
+  return segments.map((segment) => {
+    if (segment.startsWith("{{") && segment.endsWith("}}")) return segment;
+    return segment.replace(/\{([^{}]+)\}/g, (_match, raw: string) => {
+      const name = raw.trim().toLowerCase();
+      if (name === "campanha") return context.campanha ?? "";
+      if (name === "anuncio") return context.anuncio ?? "";
+      return variableValue(name, context, options);
+    });
+  }).join("").trim();
+}
+
+// Converte o formato antigo (5 campos separados) para a string unica,
+// com os mesmos valores que o modelo publicaria hoje.
+export function legacyUtmsToParams(utms: Record<string, string> | null | undefined): string {
+  if (!utms) return "";
+  const entries: Array<[string, string | undefined]> = [
+    ["utm_source", utms.utm_source],
+    ["utm_medium", utms.utm_medium],
+    ["utm_campaign", utms.utm_campaign],
+    ["utm_content", utms.utm_content],
+    ["utm_term", utms.utm_term],
+  ];
+  return entries
+    .filter(([, value]) => value != null && String(value).trim() !== "")
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+}
+
 export function buildDestinationUrl(
   baseUrl: string,
   template: UtmTemplate,
