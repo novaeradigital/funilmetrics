@@ -33,7 +33,7 @@ export default async function PublicacoesPage({searchParams}:{searchParams:Promi
      from public.campaign_upload_items item
      left join public.creatives creative on creative.id=item.creative_id
     where item.upload_id=any($1::uuid[])
-    order by case level when 'campaign' then 0 when 'adset' then 1 else 2 end,created_at`,
+    order by case level when 'campaign' then 0 when 'adset' then 1 else 2 end,item.created_at`,
   [uploads.map(u=>u.id)])).rows:[];
  const byUpload=new Map<string,ItemRow[]>();
  for(const item of items){

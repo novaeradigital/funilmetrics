@@ -2520,3 +2520,9 @@ Correcao pos-deploy no mesmo dia: a primeira versao da consulta financeira mante
 Regra do Willian: sempre que um criativo e criado a partir de um arquivo, o nome de exibicao dele e o nome do arquivo sem a extensao final (ad-fabio.mp4 vira ad-fabio; ad.final.v2.mp4 vira ad.final.v2). Sem extensao, ou quando tirar a extensao esvaziaria o nome, o nome fica como esta. Vale so para criativos novos, sem renomear a biblioteca existente, e o armazenamento fisico do arquivo nao muda.
 
 Implementacao: funcao unica creativeDisplayNameFromFileName em packages/domain, aplicada na rota de upload (Biblioteca e etapa 2 do assistente usam o mesmo painel e a mesma rota), na rota de importacao por link do Drive, no processador de importacao do worker (incluindo a sobrescrita com o nome baixado do Drive) e na sincronizacao do Drive conectado, nos pontos de criacao do criativo.
+
+## D-180: Correcao da pagina de Publicacoes, created_at ambiguo (2026-11-07)
+
+Contexto provado: a consulta de itens da pagina de Publicacoes ordenava por created_at sem qualificar; desde que a coluna Criativo entrou (join com creatives, que tambem tem created_at), o Postgres recusa a consulta com erro 42702 (column reference "created_at" is ambiguous) e a pagina cai na tela de erro. O envio em si nao era afetado: a publicacao roda fora da pagina e conclui normalmente.
+
+Decisao: ordenar por item.created_at na consulta de itens da pagina de Publicacoes. Regra derivada: em consulta com join, toda coluna de ordenacao e qualificada com o alias da tabela.
