@@ -46,15 +46,15 @@ export function ProjectCard({ id, name, counts, canManage, renameAction, deleteA
               <div
                 style={{
                   position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 20, minWidth: 168,
-                  background: "var(--panel, #fff)", border: "1px solid rgba(0,0,0,0.14)", borderRadius: 10,
-                  boxShadow: "0 10px 28px rgba(0,0,0,0.18)", padding: 6, display: "grid", gap: 2,
+                  background: "var(--fm-surface-raised)", border: "1px solid var(--fm-border-strong)", borderRadius: 10,
+                  boxShadow: "0 14px 34px rgba(0,0,0,0.55)", padding: 6, display: "grid", gap: 2, color: "var(--fm-text)",
                 }}
               >
-                <button type="button" onClick={() => { setMenuOpen(false); setRenaming(true); }} style={{ textAlign: "left", background: "transparent", border: 0, padding: "7px 9px", borderRadius: 7, cursor: "pointer" }}>Renomear</button>
-                <button type="button" onClick={() => { setMenuOpen(false); open(); }} style={{ textAlign: "left", background: "transparent", border: 0, padding: "7px 9px", borderRadius: 7, cursor: "pointer" }}>Editar</button>
+                <button type="button" onClick={() => { setMenuOpen(false); setRenaming(true); }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--fm-surface-hover)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }} style={{ textAlign: "left", background: "transparent", border: 0, padding: "7px 9px", borderRadius: 7, cursor: "pointer", color: "var(--fm-text)" }}>Renomear</button>
+                <button type="button" onClick={() => { setMenuOpen(false); open(); }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--fm-surface-hover)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }} style={{ textAlign: "left", background: "transparent", border: 0, padding: "7px 9px", borderRadius: 7, cursor: "pointer", color: "var(--fm-text)" }}>Editar</button>
                 <form action={deleteAction} onSubmit={(event) => { if (!window.confirm(`Excluir o projeto ${name}? As associações caem; contas, produtos e criativos não são apagados.`)) event.preventDefault(); }}>
                   <input name="business_id" type="hidden" value={id} />
-                  <button type="submit" style={{ textAlign: "left", width: "100%", background: "transparent", border: 0, padding: "7px 9px", borderRadius: 7, cursor: "pointer", color: "#b3261e" }}>Excluir projeto</button>
+                  <button type="submit" onMouseEnter={(e) => { e.currentTarget.style.background = "var(--fm-surface-hover)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }} style={{ textAlign: "left", width: "100%", background: "transparent", border: 0, padding: "7px 9px", borderRadius: 7, cursor: "pointer", color: "var(--fm-danger)" }}>Excluir projeto</button>
                 </form>
               </div>
             ) : null}
@@ -63,11 +63,13 @@ export function ProjectCard({ id, name, counts, canManage, renameAction, deleteA
       </div>
 
       {renaming ? (
-        <form action={renameAction} onClick={stop} className="inline-filter-form" style={{ marginTop: 8 }}>
+        <form action={renameAction} onClick={stop} style={{ marginTop: 8, display: "grid", gap: 6, width: "100%", boxSizing: "border-box" }}>
           <input name="business_id" type="hidden" value={id} />
-          <label>Renomear<input defaultValue={name} name="name" required autoFocus /></label>
-          <button type="submit">Salvar nome</button>
-          <button type="button" className="secondary-button" onClick={() => setRenaming(false)}>Cancelar</button>
+          <label style={{ display: "grid", gap: 4, minWidth: 0 }}>Renomear<input defaultValue={name} name="name" required autoFocus style={{ width: "100%", minWidth: 0, boxSizing: "border-box" }} /></label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button type="submit" style={{ flex: "1 1 auto" }}>Salvar nome</button>
+            <button type="button" className="secondary-button" onClick={() => setRenaming(false)} style={{ flex: "0 1 auto" }}>Cancelar</button>
+          </div>
         </form>
       ) : (
         <ul style={{ listStyle: "none", margin: "8px 0 2px", padding: 0, display: "grid", gap: 1, lineHeight: 1.5, fontSize: "0.85rem", color: "var(--fm-text-soft)" }}>
