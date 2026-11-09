@@ -50,7 +50,7 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
       <label>Nome do projeto<input name="name" placeholder="Ex.: Alivzon" required/></label>
       <button type="submit">Criar projeto de negócio</button>
     </form>:null}
-    <div className="integration-config-grid">{businessProjects.map((item)=>{
+    <div className="integration-config-grid" style={{marginTop:"1.25rem"}}>{businessProjects.map((item)=>{
       const contasN=bizAccounts.filter((a)=>a.business_project_id===item.id).length;
       const conexoesNomes=bizConnections.filter((c)=>c.business_project_id===item.id).map((c)=>c.name);
       const produtosNomes=bizProducts.filter((pr)=>pr.effective_id===item.id).map((pr)=>pr.name);
