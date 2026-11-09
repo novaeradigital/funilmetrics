@@ -3,7 +3,6 @@ import {redirect} from "next/navigation";
 import {createClient} from "../../../lib/supabase/server";
 import {getActiveProject} from "../../../lib/active-project";
 import {signOut} from "../actions";
-import {createProject,selectProject,updateProject} from "./actions";
 import {createBusinessProject,deleteBusinessProject,renameBusinessProject} from "./business-actions";
 import {ProjectCard} from "./project-card";
 import {loadBusinessProjects} from "../../../lib/business-projects";
@@ -16,19 +15,6 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
   const {data}=await supabase.auth.getUser();if(!data.user)redirect("/login");
   const {projects,project}=await getActiveProject(data.user.id);
   const database=getDatabase();
-  const creationOrganizations=await database.pool.query<{id:string;name:string}>(
-    `select organization.id,organization.name
-       from public.users app_user
-       join public.memberships membership on membership.user_id=app_user.id
-       join public.organizations organization
-         on organization.id=membership.organization_id
-      where app_user.auth_user_id=$1 and app_user.status='active'
-        and membership.role in('owner','administrator')
-        and ($2::uuid is null or membership.organization_id=$2)
-      order by organization.name`,
-    [data.user.id,project?.organization_id??null],
-  );
-  const canCreate=creationOrganizations.rows.length>0;
   const canManageActive=Boolean(project&&["owner","administrator"].includes(project.role));
   const multipleOrganizations=new Set(projects.map((item)=>item.organization_id)).size>1;
   const businessProjects=project?await loadBusinessProjects(database.pool,project.id).catch(()=>[] as {id:string;name:string}[]):[];
@@ -84,20 +70,5 @@ export default async function ProjectsPage({searchParams}:{searchParams:Promise<
       <p>Distribuir os itens sem projeto</p>
     </Link></article>:null}</div>
     </section>:null}
-    {project&&canManageActive?<section className="dashboard-panel"><div className="panel-heading"><div><h2>Configurações</h2></div></div>
-      <form action={updateProject} className="integration-config-grid">
-        <input name="project_id" type="hidden" value={project.id}/>
-        <label>Nome<input defaultValue={project.name} name="name" required/></label>
-        <label>Moeda<select defaultValue={project.currency} name="currency"><option value="BRL">BRL</option><option value="USD">USD</option><option value="EUR">EUR</option></select></label>
-        <label>Fuso horário<select defaultValue={project.timezone} name="timezone"><option value="America/Sao_Paulo">São Paulo</option><option value="America/New_York">Nova York</option><option value="Europe/Lisbon">Lisboa</option><option value="UTC">UTC</option></select></label>
-        <button type="submit">Salvar configurações</button>
-      </form></section>:null}
-    {canCreate?<section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Novo escopo</p><h2>Criar projeto</h2></div></div>
-      <form action={createProject} className="integration-config-grid">
-        {project?<input name="organization_id" type="hidden" value={project.organization_id}/>:<label>Organização<select name="organization_id" required>{creationOrganizations.rows.map((organization)=><option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label>}
-        <label>Nome<input name="name" required/></label><label>Moeda<select defaultValue="BRL" name="currency"><option value="BRL">BRL</option><option value="USD">USD</option><option value="EUR">EUR</option></select></label>
-        <label>Fuso horário<select defaultValue="America/Sao_Paulo" name="timezone"><option value="America/Sao_Paulo">São Paulo</option><option value="America/New_York">Nova York</option><option value="Europe/Lisbon">Lisboa</option><option value="UTC">UTC</option></select></label>
-        <button type="submit">Criar e selecionar</button>
-      </form></section>:<div className="permission-state"><strong>Sem permissão para criar projetos</strong><p>Solicite acesso de proprietário ou administrador.</p></div>}
     </div></section></main>;
 }

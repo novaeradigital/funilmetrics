@@ -25,7 +25,7 @@ export async function selectProject(data:FormData){
   if(!auth.user)redirect("/login");
   const projects=await getAccessibleProjects(auth.user.id);
   const selected=projects.find((item)=>item.id===projectId);
-  if(!selected)redirect("/dashboard/projetos?status=forbidden");
+  if(!selected)redirect("/dashboard/operacao?status=forbidden");
   const database=getDatabase();
   await database.pool.query(
     `insert into public.audit_logs(organization_id,project_id,actor_user_id,
@@ -46,12 +46,12 @@ export async function createProject(data:FormData){
   const currency=field(data,"currency",3).toUpperCase();
   if(name.length<2||!/^[A-Z]{3}$/.test(currency)||!timezone||
     !/^[0-9a-f-]{36}$/i.test(requestedOrganizationId))
-    redirect("/dashboard/projetos?status=invalid");
+    redirect("/dashboard/operacao?status=invalid");
   const supabase=await createClient();const {data:auth}=await supabase.auth.getUser();
   if(!auth.user)redirect("/login");
   const active=await getActiveProject(auth.user.id);
   if(active.project&&active.project.organization_id!==requestedOrganizationId)
-    redirect("/dashboard/projetos?status=forbidden");
+    redirect("/dashboard/operacao?status=forbidden");
   const database=getDatabase();const client=await database.pool.connect();
   try{
     await client.query("begin");
@@ -70,7 +70,7 @@ export async function createProject(data:FormData){
         and membership.role in('owner','administrator')
        order by membership.created_at limit 1 for update`,
       [auth.user.id,requestedOrganizationId])).rows[0];
-    if(!scope){await client.query("rollback");redirect("/dashboard/projetos?status=forbidden");}
+    if(!scope){await client.query("rollback");redirect("/dashboard/operacao?status=forbidden");}
     const slug=`${slugify(name)||"projeto"}-${randomBytes(3).toString("hex")}`;
     const project=(await client.query<{id:string}>(
       `insert into public.projects(organization_id,name,slug,timezone,currency)
@@ -96,7 +96,7 @@ export async function createProject(data:FormData){
     await client.query("rollback");
     if(error&&typeof error==="object"&&"digest"in error)throw error;
     console.error("project_create_failed",{code:error&&typeof error==="object"&&"code"in error?String(error.code):"unknown"});
-    redirect("/dashboard/projetos?status=error");
+    redirect("/dashboard/operacao?status=error");
   }finally{client.release();}
   revalidatePath("/dashboard","layout");redirect("/dashboard?status=project-created");
 }
@@ -105,12 +105,12 @@ export async function updateProject(data:FormData){
   const projectId=field(data,"project_id",64);const name=field(data,"name",120);
   const timezone=field(data,"timezone",80);const currency=field(data,"currency",3).toUpperCase();
   if(!/^[0-9a-f-]{36}$/i.test(projectId)||name.length<2||!/^[A-Z]{3}$/.test(currency)||!timezone)
-    redirect("/dashboard/projetos?status=invalid");
+    redirect("/dashboard/operacao?status=invalid");
   const supabase=await createClient();const {data:auth}=await supabase.auth.getUser();
   if(!auth.user)redirect("/login");
   const active=await getActiveProject(auth.user.id);
   if(!active.project||active.project.id!==projectId)
-    redirect("/dashboard/projetos?status=forbidden");
+    redirect("/dashboard/operacao?status=forbidden");
   const database=getDatabase();const client=await database.pool.connect();
   try{
     await client.query("begin");
@@ -138,7 +138,7 @@ export async function updateProject(data:FormData){
                           where allowed.membership_id=membership.id
                             and allowed.project_id=project.id))
         limit 1 for update`,[auth.user.id,projectId])).rows[0];
-    if(!scope){await client.query("rollback");redirect("/dashboard/projetos?status=forbidden");}
+    if(!scope){await client.query("rollback");redirect("/dashboard/operacao?status=forbidden");}
     await client.query(
       `update public.projects set name=$1,currency=$2,timezone=$3,updated_at=now()
         where id=$4 and organization_id=$5`,
@@ -157,7 +157,7 @@ export async function updateProject(data:FormData){
     await client.query("rollback");
     if(error&&typeof error==="object"&&"digest"in error)throw error;
     console.error("project_update_failed",{code:error&&typeof error==="object"&&"code"in error?String(error.code):"unknown"});
-    redirect("/dashboard/projetos?status=error");
+    redirect("/dashboard/operacao?status=error");
   }finally{client.release();}
-  revalidatePath("/dashboard","layout");redirect("/dashboard/projetos?status=updated");
+  revalidatePath("/dashboard","layout");redirect("/dashboard/operacao?status=updated");
 }

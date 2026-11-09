@@ -34,7 +34,7 @@ const navigationGroups=[
   {href:"/dashboard/criativos",label:"Biblioteca"},{href:"/dashboard/campanhas/criativos",label:"Criativos Meta"},
   {href:"/dashboard/campanhas/acoes",label:"Aprovações"}]},
  {key:"settings",label:"Configurações",icon:"integrations",items:[
-  {href:"/dashboard/projetos",label:"Projetos"},{href:"/dashboard/integracoes",label:"Integrações"},
+  {href:"/dashboard/projetos",label:"Projetos"},{href:"/dashboard/operacao",label:"Operação"},{href:"/dashboard/integracoes",label:"Integrações"},
   {href:"/dashboard/dominios",label:"Domínios"},{href:"/dashboard/equipe",label:"Equipe"},
   {href:"/dashboard/alertas",label:"Alertas"},{href:"/dashboard/qualidade",label:"Qualidade dos dados"},
   {href:"/dashboard/auditoria",label:"Auditoria"}]},
