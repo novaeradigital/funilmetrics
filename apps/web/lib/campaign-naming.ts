@@ -14,6 +14,8 @@ export type NamingContext = {
   formato?: string;
   conta?: string;
   pagina?: string;
+  idade?: string;
+  genero?: string;
   pais?: string;
   objetivo?: string;
   publico?: string;
@@ -30,7 +32,25 @@ export type NamingOptions = {
 const KNOWN_VARIABLES = [
   "criativo", "pasta", "produto", "data", "sequencia", "formato",
   "conta", "pagina", "pais", "objetivo", "publico", "orcamento",
+  "idade", "genero",
 ] as const;
+
+export const ALL_NAMING_VARIABLES: string[] = [...KNOWN_VARIABLES];
+
+// Faixa etaria do conjunto como texto de nome: teto aberto (65) vira
+// "25+"; faixa fechada vira "25-44".
+export function formatAgeRange(ageMin: number, ageMax: number): string {
+  if (!ageMin) return "";
+  if (!ageMax || ageMax >= 65) return `${ageMin}+`;
+  return `${ageMin}-${ageMax}`;
+}
+
+// Rotulos da selecao de genero, os mesmos da tela do assistente.
+export function genderLabel(gender: string | undefined): string {
+  if (gender === "male") return "Masculino";
+  if (gender === "female") return "Feminino";
+  return "Todos";
+}
 
 export function formatNamingDate(date: Date, format: string): string {
   const dd = String(date.getDate()).padStart(2, "0");

@@ -38,9 +38,6 @@ export default async function SubirCampanhasPage(){
  const templates=(await db.pool.query<WizardTemplate>(
   `select id::text,name,config from public.campaign_upload_templates
     where project_id=$1 order by updated_at desc`,[project.id])).rows;
- const products=(await db.pool.query<{name:string}>(
-  `select distinct name from public.commerce_products where project_id=$1
-    order by name limit 100`,[project.id])).rows.map(r=>r.name);
  return (
   <main className="app-layout">
    <DashboardSidebar activeHref="/dashboard/campanhas/subir" footerLabel="Subida de campanhas"/>
@@ -51,7 +48,7 @@ export default async function SubirCampanhasPage(){
       <div><p className="eyebrow">Campanhas</p><h1>Subir campanhas</h1>
       <p className="dashboard-context">Monte a subida em 5 etapas, revise tudo e envie pausada ou ativa. Rascunhos ficam salvos sem ir para a Meta.</p></div>
      </header>
-     <UploadWizard accounts={accounts} creatives={creativeRows} templates={templates} products={products} folders={folders}/>
+     <UploadWizard accounts={accounts} creatives={creativeRows} templates={templates} folders={folders}/>
     </div>
    </section>
   </main>

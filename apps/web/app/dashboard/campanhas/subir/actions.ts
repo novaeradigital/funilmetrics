@@ -5,7 +5,7 @@ import {createClient} from "../../../../lib/supabase/server";
 import {getActiveProject} from "../../../../lib/active-project";
 import {getDatabase} from "../../../../lib/database";
 import {decryptIntegrationSecret,loadIntegrationVaultKey} from "../../../../lib/integration-vault";
-import {expandStructure,resolveNamingPattern,resolveUtmParams,legacyUtmsToParams,DEFAULT_UTM_PARAMS,type NamingContext} from "../../../../lib/campaign-naming";
+import {expandStructure,resolveNamingPattern,resolveUtmParams,legacyUtmsToParams,DEFAULT_UTM_PARAMS,formatAgeRange,genderLabel,type NamingContext} from "../../../../lib/campaign-naming";
 import {loadMetaConnectionAccessToken} from "../../../../lib/meta-oauth";
 
 type Actor={userId:string;projectId:string;organizationId:string};
@@ -23,27 +23,27 @@ async function requireEditor():Promise<Actor>{
 
 type CopyModel={primaryText:string;headline:string;cta:string};
 type CreativeSnapshot={id:string;name:string;format:string;transcript:string|null};
-type Destination={accountId:string;accountExternalId:string;accountName:string;pageId:string;instagramId:string;pixelId:string;event:string};
+type Destination={accountId:string;accountExternalId:string;accountName:string;pageId:string;pageName?:string;instagramId:string;pixelId:string;event:string};
 type UploadConfig={
  version:string;
  destinations:Destination[];
  creatives:CreativeSnapshot[];
  structure:{campaigns:number;adSetsPerCampaign:number;adsPerAdSet:number;duplications:number;distribution:"rotate"|"sequence"|"all"};
- adSet:{objective:string;budgetLevel:"campaign"|"adset";dailyBudget:number;countries:string;ageMin:number;ageMax:number;gender:string;destinationUrl:string};
+ adSet:{objective:string;budgetLevel:"campaign"|"adset";dailyBudget:number;countries:string;ageMin:number;ageMax:number;gender:string;destinationUrl:string;partnership?:boolean};
  naming:{campaignPattern:string;adSetPattern:string;adPattern:string;separator:string;casing:"original"|"upper"|"lower";dateFormat:string};
  utmParams?:string;
  utms?:Record<string,string>;
  copies:{mode:"global"|"per_creative";global?:CopyModel;perCreative?:Record<string,CopyModel>};
- productName:string;
 };
 
 function namingBase(config:UploadConfig,destination:Destination):NamingContext{
  return {
-  produto:config.productName||undefined,
   pais:config.adSet.countries||undefined,
   data:new Date(),
   conta:destination.accountName||undefined,
-  pagina:destination.pageId||undefined,
+  pagina:destination.pageName||undefined,
+  idade:formatAgeRange(config.adSet.ageMin,config.adSet.ageMax)||undefined,
+  genero:genderLabel(config.adSet.gender),
   objetivo:config.adSet.objective||undefined,
   orcamento:config.adSet.dailyBudget||undefined,
  };
@@ -381,7 +381,6 @@ async function enqueueCreativeAiJobs(db:ReturnType<typeof getDatabase>,actor:Act
 }
 
 export async function generateCopies(input:{
- productName:string;
  items:Array<{creativeId:string;key?:string;name:string;transcript:string|null}>;
 }):Promise<{ok:boolean;error?:string;copies?:Record<string,CopyModel[]>}>{
  const actor=await requireEditor();
@@ -429,8 +428,7 @@ export async function generateCopies(input:{
    const base=baseById.get(item.creativeId);
    const transcriptText=(base?.transcript??item.transcript??"").slice(0,20000);
    const analysisText=base?.analysis?formatAnalysis(base.analysis):"";
-   const prompt="Produto (contexto da oferta): "+(input.productName||"nao informado")
-    +"\nCriativo: "+item.name
+   const prompt="Criativo: "+item.name
     +(analysisText?"\n\nAnalise do video:\n"+analysisText:"")
     +(transcriptText?"\n\nTranscricao do video:\n"+transcriptText:"\n\n(sem transcricao; baseie-se na analise do video)");
    let copies:CopyModel[]|undefined;let lastError:unknown=null;

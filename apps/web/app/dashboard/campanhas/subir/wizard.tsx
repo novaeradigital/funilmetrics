@@ -1,7 +1,7 @@
 "use client";
 import {useMemo,useState,useTransition} from "react";
 import {createUpload,saveTemplate,generateCopies,getDestinationPages,getDestinationPixels,type DestinationPage,type DestinationPixel} from "./actions";
-import {expandStructure,resolveNamingPattern,resolveUtmParams,legacyUtmsToParams,DEFAULT_UTM_PARAMS,type NamingContext} from "../../../../lib/campaign-naming";
+import {expandStructure,resolveNamingPattern,resolveUtmParams,legacyUtmsToParams,DEFAULT_UTM_PARAMS,ALL_NAMING_VARIABLES,formatAgeRange,genderLabel,type NamingContext} from "../../../../lib/campaign-naming";
 import {CreativeImportPanel} from "../../criativos/creative-import-panel";
 import {useRouter} from "next/navigation";
 
@@ -15,11 +15,11 @@ type DestinationState={pageId:string;instagramId:string;pixelId:string;event:str
 type PagesState={loading:boolean;error?:string;pages:DestinationPage[]};
 type PixelsState={loading:boolean;error?:string;pixels:DestinationPixel[]};
 
-const OBJECTIVES=["OUTCOME_SALES","OUTCOME_LEADS","OUTCOME_TRAFFIC","OUTCOME_ENGAGEMENT","OUTCOME_AWARENESS"];
+const OBJECTIVES=[{value:"OUTCOME_SALES",label:"Vendas"},{value:"OUTCOME_LEADS",label:"Leads"},{value:"OUTCOME_TRAFFIC",label:"Tráfego"},{value:"OUTCOME_ENGAGEMENT",label:"Engajamento"},{value:"OUTCOME_AWARENESS",label:"Reconhecimento"}];
 const EVENTS=["Purchase","Lead","CompleteRegistration","InitiateCheckout","ViewContent"];
 
-export function UploadWizard({accounts,creatives,templates,products,folders}:{
- accounts:WizardAccount[];creatives:WizardCreative[];templates:WizardTemplate[];products:string[];folders:WizardFolder[];
+export function UploadWizard({accounts,creatives,templates,folders}:{
+ accounts:WizardAccount[];creatives:WizardCreative[];templates:WizardTemplate[];folders:WizardFolder[];
 }){
  const [step,setStep]=useState(1);
  const [selectedAccounts,setSelectedAccounts]=useState<string[]>([]);
@@ -27,11 +27,10 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
  const [selectedCreatives,setSelectedCreatives]=useState<string[]>([]);
  const [creativeSearch,setCreativeSearch]=useState("");
  const [creativeFolder,setCreativeFolder]=useState("");
- const [productName,setProductName]=useState(products[0]??"");
  const [preset,setPreset]=useState("1-3-1");
  const [structure,setStructure]=useState({campaigns:1,adSetsPerCampaign:3,adsPerAdSet:1,duplications:1,distribution:"rotate" as "rotate"|"sequence"|"all"});
- const [adSet,setAdSet]=useState({objective:"OUTCOME_SALES",budgetLevel:"adset" as "campaign"|"adset",dailyBudget:50,countries:"BR",ageMin:18,ageMax:65,gender:"all",destinationUrl:""});
- const [naming,setNaming]=useState({campaignPattern:"{produto} | {pais} | {data}",adSetPattern:"{publico} | {pais}",adPattern:"{criativo}",separator:"_",casing:"original" as "original"|"upper"|"lower",dateFormat:"YYYYMMDD"});
+ const [adSet,setAdSet]=useState({objective:"OUTCOME_SALES",budgetLevel:"campaign" as "campaign"|"adset",dailyBudget:50,countries:"BR",ageMin:25,ageMax:65,gender:"all",destinationUrl:"",partnership:false});
+ const [naming,setNaming]=useState({campaignPattern:"{criativo} | {data} | {pagina}",adSetPattern:"{idade} | {genero} | {pais}",adPattern:"{criativo}",separator:"_",casing:"original" as "original"|"upper"|"lower",dateFormat:"YYYYMMDD"});
  const [utmParams,setUtmParams]=useState(DEFAULT_UTM_PARAMS);
  const [copyMode,setCopyMode]=useState<"global"|"per_creative">("global");
  const [generated,setGenerated]=useState<Record<string,CopyModel[]>>({});
@@ -93,8 +92,11 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
  }
  const namingOpts={separator:naming.separator,casing:naming.casing,dateFormat:naming.dateFormat as never};
  function baseContext(accountName:string):NamingContext{
-  return {produto:productName||undefined,pais:adSet.countries||undefined,data:new Date(),
-   conta:accountName,objetivo:adSet.objective,orcamento:adSet.dailyBudget,publico:undefined};
+  const firstExt=selectedAccounts[0];
+  const pageName=firstExt?pagesByAccount[firstExt]?.pages.find(pg=>pg.id===(destinations[firstExt]?.pageId??""))?.name:undefined;
+  return {pais:adSet.countries||undefined,data:new Date(),
+   conta:accountName,pagina:pageName||undefined,idade:formatAgeRange(adSet.ageMin,adSet.ageMax)||undefined,
+   genero:genderLabel(adSet.gender),objetivo:adSet.objective,orcamento:adSet.dailyBudget,publico:undefined};
  }
  type PreviewAd={name:string;creative:string;url:string;utmParams:string};
  type PreviewAdSet={name:string;ads:PreviewAd[]};
@@ -136,7 +138,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
    totalCampaigns:campaigns.length*selectedAccounts.length,
    repeatedCreative};
   // eslint-disable-next-line react-hooks/exhaustive-deps
- },[selectedAccounts,selectedCreativeObjs,structure,naming,utmParams,adSet,productName]);
+ },[selectedAccounts,selectedCreativeObjs,structure,naming,utmParams,adSet]);
 
  function currentConfig(){
   return {
@@ -144,10 +146,11 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
    destinations:selectedAccounts.map(ext=>{
     const account=accounts.find(a=>a.externalId===ext)!;
     const d=destinations[ext]??{pageId:"",instagramId:"",pixelId:"",event:"Purchase"};
-    return {accountId:account.id,accountExternalId:ext,accountName:account.name,...d};
+    const pageName=pagesByAccount[ext]?.pages.find(pg=>pg.id===d.pageId)?.name??"";
+    return {accountId:account.id,accountExternalId:ext,accountName:account.name,...d,pageName};
    }),
    creatives:selectedCreativeObjs.map(c=>({id:c.id,name:c.name,format:c.format,transcript:c.transcript})),
-   structure,adSet,naming,utmParams,productName,
+   structure,adSet,naming,utmParams,
    copies:{mode:copyMode,
     global:copyMode==="global"?edited["__global"]:undefined,
     perCreative:copyMode==="per_creative"?Object.fromEntries(
@@ -160,7 +163,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
    const items=copyMode==="global"
     ? [{creativeId:selectedCreativeObjs[0]?.id??"__global",key:"__global",name:selectedCreativeObjs[0]?.name??"geral",transcript:selectedCreativeObjs[0]?.transcript??null}]
     : selectedCreativeObjs.map(c=>({creativeId:c.id,key:c.id,name:c.name,transcript:c.transcript}));
-   const result=await generateCopies({productName,items});
+   const result=await generateCopies({items});
    if(!result.ok){setCopyError(result.error??"Falha na geracao.");return;}
    setGenerated(result.copies??{});
    const nextChosen:Record<string,number>={};const nextEdited:Record<string,CopyModel>={...edited};
@@ -199,7 +202,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
 
  return <div>
   <nav aria-label="Etapas da subida" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
-   {["1. Destino","2. Criativos","3. Estrutura","4. Conjunto","5. Copys e revisao"].map((label,index)=>
+   {["1. Destino","2. Criativos","3. Estrutura","4. Camp/Conj/anun","5. Copys e revisao"].map((label,index)=>
     <button key={label} type="button" className={step===index+1?"period-active":"secondary-button"}
      style={step===index+1?{background:"#f59e0b",color:"#1a1207",fontWeight:700,borderColor:"#f59e0b",boxShadow:"0 0 0 2px rgba(245,158,11,.35)"}:undefined}
      aria-current={step===index+1?"step":undefined}
@@ -291,7 +294,7 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
    <h2>Conjunto de anuncios</h2>
    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
     <label>Objetivo<select value={adSet.objective} onChange={e=>setAdSet(s=>({...s,objective:e.target.value}))}>
-     {OBJECTIVES.map(o=><option key={o} value={o}>{o}</option>)}</select></label>
+     {OBJECTIVES.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
     <label>Orcamento no<select value={adSet.budgetLevel} onChange={e=>setAdSet(s=>({...s,budgetLevel:e.target.value as never}))}>
      <option value="adset">Conjunto (ABO)</option><option value="campaign">Campanha (CBO)</option></select></label>
     <label>Orcamento diario<input type="number" min={1} value={adSet.dailyBudget} onChange={e=>setAdSet(s=>({...s,dailyBudget:Number(e.target.value)}))}/></label>
@@ -302,9 +305,22 @@ export function UploadWizard({accounts,creatives,templates,products,folders}:{
      <option value="all">Todos</option><option value="female">Feminino</option><option value="male">Masculino</option></select></label>
     <label style={{flex:1}}>URL de destino<input style={{width:"100%"}} value={adSet.destinationUrl} onChange={e=>setAdSet(s=>({...s,destinationUrl:e.target.value}))}/></label>
    </div>
+   <div style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}>
+    <button type="button" role="switch" aria-checked={adSet.partnership} aria-label="Anúncio em parceria"
+     onClick={()=>setAdSet(s=>({...s,partnership:!s.partnership}))}
+     style={{width:40,height:22,borderRadius:999,border:0,padding:2,cursor:"pointer",background:adSet.partnership?"var(--fm-purple)":"var(--fm-border-strong)",display:"flex",justifyContent:adSet.partnership?"flex-end":"flex-start"}}>
+     <span style={{width:18,height:18,borderRadius:"50%",background:"#fff",display:"block"}}/>
+    </button>
+    <span>Anúncio em parceria</span>
+    <span style={{color:"var(--fm-text-soft)"}}>{adSet.partnership?"Ativado":"Desativado"}</span>
+   </div>
+   {adSet.partnership?<p className="dashboard-context" style={{marginTop:6}}>Para publicar como parceria de verdade, a Meta exige a identidade do parceiro (a página ou o Instagram dele) e a autorização dele ao anunciante. Este assistente ainda não coleta esses dados, então, por enquanto, ligar o interruptor só registra a intenção na configuração: a publicação sai como anúncio comum.</p>:null}
    <h3>Nomenclatura</h3>
-   <label style={{display:"block"}}>Produto<input style={{width:"100%"}} list="wizard-products" value={productName} onChange={e=>setProductName(e.target.value)}/></label>
-   <datalist id="wizard-products">{products.map(p=><option key={p} value={p}/>)}</datalist>
+   <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"4px 0 10px"}}>
+    {ALL_NAMING_VARIABLES.filter(v=>v!=="produto").map(v=><button key={v} type="button" title="Copiar variável"
+     onClick={()=>{void navigator.clipboard?.writeText(`{${v}}`);}}
+     style={{border:"1px solid var(--fm-border-strong)",background:"var(--fm-surface-raised)",color:"var(--fm-text)",borderRadius:999,padding:"2px 10px",fontSize:"0.75rem",cursor:"pointer"}}>{`{${v}}`}</button>)}
+   </div>
    <label style={{display:"block"}}>Campanha<input style={{width:"100%"}} value={naming.campaignPattern} onChange={e=>setNaming(s=>({...s,campaignPattern:e.target.value}))}/></label>
    <label style={{display:"block"}}>Conjunto<input style={{width:"100%"}} value={naming.adSetPattern} onChange={e=>setNaming(s=>({...s,adSetPattern:e.target.value}))}/></label>
    <label style={{display:"block"}}>Anuncio<input style={{width:"100%"}} value={naming.adPattern} onChange={e=>setNaming(s=>({...s,adPattern:e.target.value}))}/></label>

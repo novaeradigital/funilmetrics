@@ -5,6 +5,8 @@ import {
   DEFAULT_UTM_PARAMS,
   expandStructure,
   legacyUtmsToParams,
+  formatAgeRange,
+  genderLabel,
   resolveNamingPattern,
   resolveUtmParams,
   unknownPatternVariables,
@@ -80,5 +82,21 @@ describe("expandStructure", () => {
       { campaigns: 1, adSetsPerCampaign: 1, adsPerAdSet: 1, duplications: 2, distribution: "rotate" }, 1);
     expect(slots).toHaveLength(2);
     expect(slots.map((s) => s.campaignIndex)).toEqual([0, 1]);
+  });
+});
+
+describe("variaveis do assistente (D-184)", () => {
+  it("resolve pagina pelo nome, idade aberta e genero", () => {
+    const ctx = { criativo: "video camisa branca", data: new Date(2026, 10, 8), pagina: "Instituto Inti", pais: "BR", idade: formatAgeRange(25, 65), genero: genderLabel("all") };
+    expect(resolveNamingPattern("{criativo} | {data} | {pagina}", ctx, { separator: " | " })).toBe("video camisa branca | 20261108 | Instituto Inti");
+    expect(resolveNamingPattern("{idade} | {genero} | {pais}", ctx, { separator: " | " })).toBe("25+ | Todos | BR");
+  });
+  it("idade fechada e rotulos de genero", () => {
+    expect(formatAgeRange(25, 44)).toBe("25-44");
+    expect(genderLabel("female")).toBe("Feminino");
+    expect(genderLabel("male")).toBe("Masculino");
+  });
+  it("padrao antigo com {produto} resolve vazio sem quebrar", () => {
+    expect(resolveNamingPattern("{produto} | {pais}", { pais: "BR" }, { separator: " | " })).toBe("BR");
   });
 });
