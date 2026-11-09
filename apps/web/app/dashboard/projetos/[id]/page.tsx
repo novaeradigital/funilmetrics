@@ -5,7 +5,8 @@ import { getActiveProject } from "../../../../lib/active-project";
 import { signOut } from "../../actions";
 import { getDatabase } from "../../../../lib/database";
 import { DashboardSidebar } from "../../dashboard-sidebar";
-import { moveCreativesToFolder, setBusinessAssociation } from "../association-actions";
+import { addCreativesToBusinessProject, moveCreativesToFolder, removeCreativeFromBusinessProject, setBusinessAssociation } from "../association-actions";
+import { AssociationPicker, type PickerGroup } from "../association-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -62,79 +63,94 @@ export default async function BusinessProjectPage({ params, searchParams }: {
   };
   const projectFolders = mine.folders;
 
-  const assocButton = (target: string, targetId: string, label: string, businessId: string) => (
-    <form action={setBusinessAssociation} className="inline-filter-form">
+  function groupsFor<T extends { id: string; name: string }>(
+    rows: T[],
+    bizOf: (row: T) => string | null,
+    detailOf?: (row: T) => string | undefined,
+  ): PickerGroup[] {
+    const free = rows.filter((row) => bizOf(row) === null);
+    const taken = rows.filter((row) => bizOf(row) !== null);
+    const groups: PickerGroup[] = [];
+    if (free.length) groups.push({ title: "Sem projeto", items: free.map((row) => ({ id: row.id, name: row.name, detail: detailOf?.(row) })) });
+    if (taken.length) groups.push({ title: "Em outros projetos", items: taken.map((row) => ({ id: row.id, name: row.name, detail: `projeto ${nameById.get(bizOf(row)!) ?? "outro"}` })) });
+    return groups;
+  }
+  const removeButton = (target: string, targetId: string, label = "Remover") => (
+    <form action={setBusinessAssociation}>
       <input name="target" type="hidden" value={target} />
       <input name="target_id" type="hidden" value={targetId} />
-      <input name="business_project_id" type="hidden" value={businessId} />
+      <input name="business_project_id" type="hidden" value="" />
       <input name="return_to" type="hidden" value={returnTo} />
-      <button type="submit" className={businessId ? "" : "secondary-button"}>{label}</button>
+      <button type="submit" className="secondary-button">{label}</button>
     </form>
   );
-  const currentLabel = (businessId: string | null) => businessId ? (nameById.get(businessId) ?? "outro projeto") : "sem projeto";
+  const sectionHead = (title: string, count: number) => (
+    <div className="panel-heading"><div><h2>{title} · {count}</h2></div></div>
+  );
 
   return <main className="app-layout"><DashboardSidebar activeHref="/dashboard/projetos" footerLabel="Isolamento por projeto" />
     <section className="app-content"><header className="app-topbar"><div className="project-switcher"><small>Projeto atual</small><strong>{project.name}</strong></div><form action={signOut}><button className="icon-button">Sair</button></form></header>
-    <div className="dashboard-main"><header className="dashboard-titlebar"><div><p className="eyebrow"><Link href="/dashboard/projetos">Projetos</Link> · Projeto de negócio</p><h1>{business.name}</h1><p className="dashboard-context">{mine.accounts.length} conta(s) · {mine.connections.length} conexão(ões) · {mine.products.length} produto(s) · {mine.creatives.length} criativo(s). A associação é exclusiva: cada item pertence a no máximo um projeto, e os filtros do Dashboard e do Melhores Anúncios leem esta divisão, inclusive no histórico.</p></div></header>
+    <div className="dashboard-main"><header className="dashboard-titlebar"><div><p className="eyebrow"><Link href="/dashboard/projetos">Projetos</Link> · Projeto de negócio</p><h1>{business.name}</h1><p className="dashboard-context">A associação é exclusiva: cada item pertence a no máximo um projeto, e os filtros do Dashboard e do Melhores Anúncios leem esta divisão, inclusive no histórico.</p></div></header>
     {query.status === "business-assigned" ? <div className="notice notice-success">Associação salva. Os filtros já valem com a nova divisão.</div> : null}
     {query.status === "business-invalid" ? <div className="notice notice-error">Não foi possível salvar. Revise a seleção e tente de novo.</div> : null}
     {query.status === "forbidden" ? <div className="notice notice-error">Você não possui permissão para esta ação.</div> : null}
 
-    <section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Associações</p><h2>Contas de anúncio</h2></div></div>
+    <section className="dashboard-panel">{sectionHead("Contas de anúncio", mine.accounts.length)}
       {mine.accounts.map((account) => <div className="folder-admin-row" key={account.id}>
-        <strong>{account.name}</strong><span>neste projeto</span>
-        {canManage ? assocButton("account", account.id, "Remover do projeto", "") : null}
+        <strong>{account.name}</strong>
+        {canManage ? removeButton("account", account.id) : null}
       </div>)}
-      {others.accounts.map((account) => <div className="folder-admin-row" key={account.id}>
-        <strong>{account.name}</strong><span>{currentLabel(account.business_project_id)}</span>
-        {canManage ? assocButton("account", account.id, "Trazer para este projeto", business.id) : null}
-      </div>)}
-      {accounts.rows.length === 0 ? <p className="dashboard-context">Nenhuma conta de anúncio neste projeto do sistema.</p> : null}
+      {mine.accounts.length === 0 ? <p className="dashboard-context">Nenhuma conta associada a este projeto.</p> : null}
+      {canManage ? <AssociationPicker target="account" businessProjectId={business.id} returnTo={returnTo} action={setBusinessAssociation}
+        groups={groupsFor(others.accounts, (row: Account) => row.business_project_id)} /> : null}
     </section>
 
-    <section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Associações</p><h2>Conexões de pagamento</h2></div></div>
+    <section className="dashboard-panel">{sectionHead("Conexões de pagamento", mine.connections.length)}
       {mine.connections.map((connection) => <div className="folder-admin-row" key={connection.id}>
-        <strong>{connection.name}</strong><span>{providerLabels[connection.provider] ?? connection.provider} · neste projeto</span>
-        {canManage ? assocButton("connection", connection.id, "Remover do projeto", "") : null}
+        <strong>{connection.name}</strong><span>{providerLabels[connection.provider] ?? connection.provider}</span>
+        {canManage ? removeButton("connection", connection.id) : null}
       </div>)}
-      {others.connections.map((connection) => <div className="folder-admin-row" key={connection.id}>
-        <strong>{connection.name}</strong><span>{providerLabels[connection.provider] ?? connection.provider} · {currentLabel(connection.business_project_id)}</span>
-        {canManage ? assocButton("connection", connection.id, "Trazer para este projeto", business.id) : null}
-      </div>)}
-      {connections.rows.length === 0 ? <p className="dashboard-context">Nenhuma conexão de pagamento neste projeto do sistema.</p> : null}
+      {mine.connections.length === 0 ? <p className="dashboard-context">Nenhuma conexão associada a este projeto.</p> : null}
+      {canManage ? <AssociationPicker target="connection" businessProjectId={business.id} returnTo={returnTo} action={setBusinessAssociation}
+        groups={groupsFor(others.connections, (row: Connection) => row.business_project_id, (row: Connection) => providerLabels[row.provider] ?? row.provider)} /> : null}
     </section>
 
-    <section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Associações</p><h2>Produtos</h2></div></div>
-      <p className="dashboard-context">Produto sem projeto próprio herda o da conexão. Associar aqui fixa o projeto no produto; remover volta a herança.</p>
+    <section className="dashboard-panel">{sectionHead("Produtos", mine.products.length)}
       {mine.products.map((product) => <div className="folder-admin-row" key={product.id}>
-        <strong>{product.name}</strong><span>{product.connection_name} · {product.override_id === business.id ? "neste projeto, fixado no produto" : "neste projeto, herdado da conexão"}</span>
-        {canManage && product.override_id === business.id ? assocButton("product", product.id, "Voltar a herdar da conexão", "") : null}
+        <strong>{product.name}</strong>
+        <span>{product.override_id === business.id ? "fixado neste projeto" : `pela conexão ${product.connection_name}`}</span>
+        {canManage && product.override_id === business.id ? removeButton("product", product.id, "Voltar a herdar") : null}
       </div>)}
-      {others.products.map((product) => <div className="folder-admin-row" key={product.id}>
-        <strong>{product.name}</strong><span>{product.connection_name} · {currentLabel(product.effective_id)}</span>
-        {canManage ? assocButton("product", product.id, "Associar a este projeto", business.id) : null}
-      </div>)}
-      {products.rows.length === 0 ? <p className="dashboard-context">Nenhum produto neste projeto do sistema.</p> : null}
+      {mine.products.length === 0 ? <p className="dashboard-context">Nenhum produto associado a este projeto.</p> : null}
+      {canManage ? <AssociationPicker target="product" businessProjectId={business.id} returnTo={returnTo} action={setBusinessAssociation}
+        groups={groupsFor(others.products, (row: Product) => row.effective_id, (row: Product) => `conexão ${row.connection_name}`)} /> : null}
     </section>
 
-    <section className="dashboard-panel"><div className="panel-heading"><div><p className="panel-label">Organização</p><h2>Criativos e pastas</h2></div></div>
-      <p className="dashboard-context">A organização é Projeto, depois Pasta, depois Criativo, sem subpastas. A pasta é um agrupamento livre e opcional dentro do projeto: o uso principal é separar os criativos por produto quando o projeto tem mais de um, e também vale por ângulo ou leva. Criativo pode viver direto no projeto, sem pasta. Um criativo fica em uma pasta só, e o projeto da pasta vale para os criativos dela que não têm projeto próprio.</p>
-      <h3>Pastas</h3>
+    <section className="dashboard-panel">{sectionHead("Pastas de criativos", mine.folders.length)}
       {mine.folders.map((folder) => <div className="folder-admin-row" key={folder.id}>
-        <strong>{folder.name}</strong><span>{folder.creatives} criativo(s) · neste projeto</span>
-        {canManage ? assocButton("folder", folder.id, "Remover do projeto", "") : null}
+        <strong>{folder.name}</strong><span>{folder.creatives} criativo(s)</span>
+        {canManage ? removeButton("folder", folder.id) : null}
       </div>)}
-      {others.folders.map((folder) => <div className="folder-admin-row" key={folder.id}>
-        <strong>{folder.name}</strong><span>{folder.creatives} criativo(s) · {currentLabel(folder.business_project_id)}</span>
-        {canManage ? assocButton("folder", folder.id, "Trazer para este projeto", business.id) : null}
-      </div>)}
-      {folders.rows.length === 0 ? <p className="dashboard-context">Nenhuma pasta de criativos. Crie pastas na Biblioteca de criativos.</p> : null}
-      <h3>Criativos deste projeto</h3>
+      {mine.folders.length === 0 ? <p className="dashboard-context">Nenhuma pasta associada a este projeto.</p> : null}
+      {canManage ? <AssociationPicker target="folder" businessProjectId={business.id} returnTo={returnTo} action={setBusinessAssociation}
+        groups={groupsFor(others.folders, (row: Folder) => row.business_project_id, (row: Folder) => `${row.creatives} criativo(s)`)} /> : null}
+    </section>
+
+    <section className="dashboard-panel">{sectionHead("Criativos", mine.creatives.length)}
+      <p className="dashboard-context">A pasta é um agrupamento livre e opcional dentro do projeto: o uso principal é separar os criativos por produto quando o projeto tem mais de um, e também vale por ângulo ou leva. Criativo pode viver direto no projeto, sem pasta.</p>
       {mine.creatives.map((creative) => <div className="folder-admin-row" key={creative.id}>
-        <strong>{creative.name}</strong><span>{creative.folder_name ? `pasta ${creative.folder_name}` : "sem pasta"} · {creative.own_id === business.id ? "projeto fixado no criativo" : "projeto herdado"}</span>
-        {canManage && creative.own_id === business.id ? assocButton("creative", creative.id, "Tirar o projeto do criativo", "") : null}
+        <strong>{creative.name}</strong>
+        <span>{creative.folder_name ? `pasta ${creative.folder_name}` : "sem pasta"} · {creative.own_id === business.id ? "fixado no criativo" : "pelo projeto da pasta"}</span>
+        {canManage ? <form action={removeCreativeFromBusinessProject}>
+          <input name="creative_id" type="hidden" value={creative.id} />
+          <input name="return_to" type="hidden" value={returnTo} />
+          <button type="submit" className="secondary-button">Remover</button>
+        </form> : null}
       </div>)}
-      {mine.creatives.length === 0 ? <p className="dashboard-context">Nenhum criativo neste projeto ainda.</p> : null}
+      {mine.creatives.length === 0 ? <p className="dashboard-context">Nenhum criativo associado a este projeto.</p> : null}
+      {canManage ? <AssociationPicker target="creative" businessProjectId={business.id} returnTo={returnTo} action={setBusinessAssociation}
+        bulkAction={addCreativesToBusinessProject} multi
+        groups={groupsFor(creatives.rows.filter((row) => row.effective_id !== business.id), (row: Creative) => row.effective_id, (row: Creative) => row.folder_name ? `pasta ${row.folder_name}` : undefined)} /> : null}
       <h3>Mover criativos entre pastas</h3>
       {mine.creatives.length === 0 ? <p className="dashboard-context">Nenhum criativo neste projeto para mover.</p> :
       <form action={moveCreativesToFolder}>

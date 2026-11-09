@@ -93,3 +93,54 @@ export async function moveCreativesToFolder(data: FormData) {
   );
   backTo(returnTo, "business-assigned");
 }
+
+/** Adiciona criativos em massa a um projeto de negocio, fixando o projeto em cada um. */
+export async function addCreativesToBusinessProject(data: FormData) {
+  const scope = await requireManager();
+  const returnTo = field(data, "return_to", 200) || "/dashboard/projetos";
+  const businessId = field(data, "business_project_id", 64);
+  const creativeIds = data.getAll("creative_id")
+    .map((value) => String(value).trim())
+    .filter((value) => uuidPattern.test(value))
+    .slice(0, 200);
+  if (!uuidPattern.test(businessId) || creativeIds.length === 0)
+    backTo(returnTo, "business-invalid");
+  const database = getDatabase();
+  const business = await database.pool.query(
+    `select id from public.business_projects where id = $1 and project_id = $2 limit 1`,
+    [businessId, scope.projectId],
+  );
+  if (!business.rows[0]) backTo(returnTo, "business-invalid");
+  await database.pool.query(
+    `update public.creatives set business_project_id = $1, updated_at = now()
+      where id = any($2::uuid[]) and project_id = $3`,
+    [businessId, creativeIds, scope.projectId],
+  );
+  backTo(returnTo, "business-assigned");
+}
+
+/** Tira um criativo do projeto: limpa o projeto proprio; se o projeto vinha da pasta, tira da pasta. */
+export async function removeCreativeFromBusinessProject(data: FormData) {
+  const scope = await requireManager();
+  const returnTo = field(data, "return_to", 200) || "/dashboard/projetos";
+  const creativeId = field(data, "creative_id", 64);
+  if (!uuidPattern.test(creativeId)) backTo(returnTo, "business-invalid");
+  const database = getDatabase();
+  const current = await database.pool.query<{ business_project_id: string | null }>(
+    `select business_project_id from public.creatives where id = $1 and project_id = $2 limit 1`,
+    [creativeId, scope.projectId],
+  );
+  if (!current.rows[0]) backTo(returnTo, "business-invalid");
+  if (current.rows[0].business_project_id) {
+    await database.pool.query(
+      `update public.creatives set business_project_id = null, updated_at = now() where id = $1 and project_id = $2`,
+      [creativeId, scope.projectId],
+    );
+  } else {
+    await database.pool.query(
+      `update public.creatives set folder_id = null, updated_at = now() where id = $1 and project_id = $2`,
+      [creativeId, scope.projectId],
+    );
+  }
+  backTo(returnTo, "business-assigned");
+}
