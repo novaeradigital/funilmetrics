@@ -75,13 +75,18 @@ export default async function BusinessProjectPage({ params, searchParams }: {
     if (taken.length) groups.push({ title: "Em outros projetos", items: taken.map((row) => ({ id: row.id, name: row.name, detail: `projeto ${nameById.get(bizOf(row)!) ?? "outro"}` })) });
     return groups;
   }
+  const removeButtonStyle: React.CSSProperties = {
+    background: "var(--fm-danger)", color: "#fff", border: 0, borderRadius: 6,
+    fontSize: "0.72rem", lineHeight: 1.2, padding: "3px 10px", cursor: "pointer",
+    width: "auto", height: "auto", minHeight: 0, display: "inline-block",
+  };
   const removeButton = (target: string, targetId: string, label = "Remover") => (
     <form action={setBusinessAssociation}>
       <input name="target" type="hidden" value={target} />
       <input name="target_id" type="hidden" value={targetId} />
       <input name="business_project_id" type="hidden" value="" />
       <input name="return_to" type="hidden" value={returnTo} />
-      <button type="submit" className="secondary-button">{label}</button>
+      <button type="submit" style={removeButtonStyle}>{label}</button>
     </form>
   );
   const sectionHead = (title: string, count: number) => (
@@ -144,7 +149,7 @@ export default async function BusinessProjectPage({ params, searchParams }: {
         {canManage ? <form action={removeCreativeFromBusinessProject}>
           <input name="creative_id" type="hidden" value={creative.id} />
           <input name="return_to" type="hidden" value={returnTo} />
-          <button type="submit" className="secondary-button">Remover</button>
+          <button type="submit" style={removeButtonStyle}>Remover</button>
         </form> : null}
       </div>)}
       {mine.creatives.length === 0 ? <p className="dashboard-context">Nenhum criativo associado a este projeto.</p> : null}
