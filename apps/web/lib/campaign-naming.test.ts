@@ -99,4 +99,9 @@ describe("variaveis do assistente (D-184)", () => {
   it("padrao antigo com {produto} resolve vazio sem quebrar", () => {
     expect(resolveNamingPattern("{produto} | {pais}", { pais: "BR" }, { separator: " | " })).toBe("BR");
   });
+  it("{data} em dd/mm/aa com ano de 2 digitos", () => {
+    const ctx = { criativo: "video camisa branca", data: new Date(2026, 10, 8), pagina: "Instituto Inti" };
+    expect(resolveNamingPattern("{criativo} | {data} | {pagina}", ctx, { separator: " | ", dateFormat: "DD/MM/YY" })).toBe("video camisa branca | 08/11/26 | Instituto Inti");
+    expect(resolveNamingPattern("{data}", { data: new Date(2027, 0, 5) }, { dateFormat: "DD/MM/YY" })).toBe("05/01/27");
+  });
 });

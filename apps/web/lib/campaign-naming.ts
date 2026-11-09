@@ -26,7 +26,7 @@ export type NamingContext = {
 export type NamingOptions = {
   separator?: string;
   casing?: "original" | "upper" | "lower";
-  dateFormat?: "YYYYMMDD" | "DDMMYYYY" | "YYYY-MM-DD" | "DD/MM/YYYY";
+  dateFormat?: "YYYYMMDD" | "DDMMYYYY" | "YYYY-MM-DD" | "DD/MM/YYYY" | "DD/MM/YY";
 };
 
 const KNOWN_VARIABLES = [
@@ -60,6 +60,7 @@ export function formatNamingDate(date: Date, format: string): string {
     case "DDMMYYYY": return `${dd}${mm}${yyyy}`;
     case "YYYY-MM-DD": return `${yyyy}-${mm}-${dd}`;
     case "DD/MM/YYYY": return `${dd}/${mm}/${yyyy}`;
+    case "DD/MM/YY": return `${dd}/${mm}/${yyyy.slice(2)}`;
     default: return `${yyyy}${mm}${dd}`;
   }
 }

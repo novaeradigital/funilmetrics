@@ -2559,3 +2559,9 @@ Adendo D-183, 2026-11-08 (noite): a tela do projeto foi reorganizada a pedido do
 - Etapa 4 renomeada para "4. Camp/Conj/anun".
 - Interruptor "Anuncio em parceria" sob a URL de destino, desligado por padrao, salvo na configuracao da subida. Publicacao em parceria de verdade exige a identidade do parceiro (pagina ou Instagram dele) e a autorizacao dele ao anunciante, que o assistente ainda nao coleta: ligado, ele so registra a intencao e a tela avisa; a publicacao sai como anuncio comum.
 - Campo Produto REMOVIDO do assistente (decisao do Willian de 2026-11-08): as copys nascem da analise e da transcricao do video. Sai o campo, o estado, o productName da configuracao, o parametro do generateCopies e a linha "Produto (contexto da oferta)" do prompt; a trava de criativo sem transcricao nem analise segue intacta. {produto} deixa de ser alimentada e sai dos chips; padroes e modelos antigos que a contenham resolvem vazia, sem quebrar, e modelos com productName salvo carregam ignorando o campo.
+
+## D-185: {data} em dd/mm/aa como padrao do assistente (2026-11-08, complemento da D-184)
+
+- Motor de nomenclatura ganha o formato DD/MM/YY (dia e mes com zero a esquerda, ano de 2 digitos) em formatNamingDate e no tipo das opcoes.
+- O assistente nasce com DD/MM/YY (assistente sem modelo e modelo novo); modelo salvo mantem o formato salvo, na mesma regra do CBO. A etapa de Nomenclatura nao tem seletor de formato de data na tela, entao nenhuma opcao nova de tela foi criada.
+- Vale na previa e na publicacao, que usam o mesmo motor. Prova por teste: 2026-11-08 vira "08/11/26" no padrao da campanha ("criativo | 08/11/26 | pagina") e 2027-01-05 vira "05/01/27".

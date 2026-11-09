@@ -30,7 +30,7 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
  const [preset,setPreset]=useState("1-3-1");
  const [structure,setStructure]=useState({campaigns:1,adSetsPerCampaign:3,adsPerAdSet:1,duplications:1,distribution:"rotate" as "rotate"|"sequence"|"all"});
  const [adSet,setAdSet]=useState({objective:"OUTCOME_SALES",budgetLevel:"campaign" as "campaign"|"adset",dailyBudget:50,countries:"BR",ageMin:25,ageMax:65,gender:"all",destinationUrl:"",partnership:false});
- const [naming,setNaming]=useState({campaignPattern:"{criativo} | {data} | {pagina}",adSetPattern:"{idade} | {genero} | {pais}",adPattern:"{criativo}",separator:"_",casing:"original" as "original"|"upper"|"lower",dateFormat:"YYYYMMDD"});
+ const [naming,setNaming]=useState({campaignPattern:"{criativo} | {data} | {pagina}",adSetPattern:"{idade} | {genero} | {pais}",adPattern:"{criativo}",separator:"_",casing:"original" as "original"|"upper"|"lower",dateFormat:"DD/MM/YY"});
  const [utmParams,setUtmParams]=useState(DEFAULT_UTM_PARAMS);
  const [copyMode,setCopyMode]=useState<"global"|"per_creative">("global");
  const [generated,setGenerated]=useState<Record<string,CopyModel[]>>({});
