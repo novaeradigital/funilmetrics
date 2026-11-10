@@ -68,6 +68,16 @@ export default async function IntegrationsPage({
         and connection.provider='kiwify'`,
     [organizationId, scope.project_id],
   )).rows[0] ?? { total: 0, active: 0, last_event_at: null };
+  const madameLunaSummary = (await database.pool.query<{ total: number; active: number; last_event_at: Date | null }>(
+    `select count(distinct connection.id)::int total,
+            count(distinct connection.id) filter(where connection.status='active')::int active,
+            max(event.received_at) last_event_at
+       from public.connections connection
+       left join public.raw_events event on event.connection_id=connection.id
+      where connection.organization_id=$1 and connection.project_id=$2
+        and connection.provider='madame_luna'`,
+    [organizationId, scope.project_id],
+  )).rows[0] ?? { total: 0, active: 0, last_event_at: null };
   const formatWhen = (when: Date) =>
     new Intl.DateTimeFormat("pt-BR", {
       dateStyle: "short",
@@ -126,6 +136,15 @@ export default async function IntegrationsPage({
       active: kiwifySummary.active > 0,
       detail: kiwifySummary.last_event_at ? `Último evento em ${formatWhen(kiwifySummary.last_event_at)}` : "Vendas da Kiwify entram por webhook e disparam o Purchase para a Meta.",
       cta: kiwifySummary.total ? "Gerenciar" : "Conectar",
+    },
+    {
+      id: "madame_luna",
+      name: "Madame Luna",
+      href: "/dashboard/integracoes/madame-luna",
+      status: madameLunaSummary.total ? `${madameLunaSummary.active} de ${madameLunaSummary.total} conexão(ões) ativa(s)` : "Nenhuma conexão ativa",
+      active: madameLunaSummary.active > 0,
+      detail: madameLunaSummary.last_event_at ? `Último evento em ${formatWhen(madameLunaSummary.last_event_at)}` : "Vendas do checkout próprio da Luna (app e tr) entram por webhook. O Purchase da Meta segue pela CAPI da Luna; aqui é só receita e atribuição.",
+      cta: madameLunaSummary.total ? "Gerenciar" : "Conectar",
     },
   ];
   const marketing: HubCard[] = [

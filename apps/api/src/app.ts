@@ -18,6 +18,11 @@ import {
 } from "./modules/kiwify/repository.js";
 import { registerKiwifyRoutes } from "./modules/kiwify/routes.js";
 import {
+  createMadameLunaRepository,
+  type MadameLunaRepository,
+} from "./modules/madame-luna/repository.js";
+import { registerMadameLunaRoutes } from "./modules/madame-luna/routes.js";
+import {
   createConfigCheckoutRepository,
   type ConfigCheckoutRepository,
 } from "./modules/configcheckout/repository.js";
@@ -30,6 +35,7 @@ import {registerEdgeRedirectRoutes} from "./modules/edge-redirect/routes.js";
 type BuildAppOptions = {
   tictoRepository?: TictoRepository;
   kiwifyRepository?: KiwifyRepository;
+  madameLunaRepository?: MadameLunaRepository;
   lastlinkRepository?: LastlinkRepository;
   configCheckoutRepository?: ConfigCheckoutRepository;
   trackingRepository?: TrackingRepository;
@@ -74,6 +80,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   let database: ReturnType<typeof createDatabase> | undefined;
   let tictoRepository = options.tictoRepository;
   let kiwifyRepository = options.kiwifyRepository;
+  let madameLunaRepository = options.madameLunaRepository;
   let lastlinkRepository = options.lastlinkRepository;
   let configCheckoutRepository = options.configCheckoutRepository;
   let trackingRepository=options.trackingRepository;
@@ -90,6 +97,7 @@ export function buildApp(options: BuildAppOptions = {}) {
     });
     tictoRepository = createTictoRepository(database.db);
     kiwifyRepository = createKiwifyRepository(database.db);
+    madameLunaRepository = createMadameLunaRepository(database.db);
     lastlinkRepository = createLastlinkRepository(database.db);
     configCheckoutRepository = createConfigCheckoutRepository(database.db);
     trackingRepository=createTrackingRepository(database.pool);
@@ -101,6 +109,9 @@ export function buildApp(options: BuildAppOptions = {}) {
   }
   if (kiwifyRepository) {
     void registerKiwifyRoutes(app, kiwifyRepository);
+  }
+  if (madameLunaRepository) {
+    void registerMadameLunaRoutes(app, madameLunaRepository);
   }
   if (lastlinkRepository) {
     void registerLastlinkRoutes(app, lastlinkRepository);
