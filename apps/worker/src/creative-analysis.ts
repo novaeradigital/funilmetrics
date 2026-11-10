@@ -11,9 +11,10 @@ type Job = {
 const schema = {
   type:"object", additionalProperties:false,
   required:["hook","promise","mechanism","proof","objections","cta","structure",
-    "performance_hypotheses","evidence","confidence","tags"],
+    "performance_hypotheses","evidence","confidence","tags","format"],
   properties:{
     hook:{type:["string","null"]}, promise:{type:["string","null"]},
+    format:{type:["string","null"],enum:["podcast","entrevista","caixa de perguntas","depoimento","dramatização","UGC","gravação de tela","apresentador pra câmera","outro",null]},
     mechanism:{type:["string","null"]}, cta:{type:["string","null"]},
     proof:{type:"array",items:{type:"string"}}, objections:{type:"array",items:{type:"string"}},
     structure:{type:"array",items:{type:"string"}},
@@ -193,7 +194,7 @@ export async function processCreativeAnalysis(pool:pg.Pool,maxAttempts=5) {
     const performanceContext=performance.length
       ? `\n\nMétricas observadas dos anúncios explicitamente ligados a esta versão (não demonstram causalidade):\n${JSON.stringify(performance)}`
       : "\n\nNão há métricas Meta ligadas a esta versão. Não formule hipóteses de desempenho.";
-    const systemText="Analise somente evidências presentes na transcrição e, quando fornecidas, métricas observadas. Não invente contexto ou resultados. Trate relações entre conteúdo e desempenho apenas como hipóteses, nunca como causalidade. Seja conciso e escreva em português do Brasil.";
+    const systemText="Analise somente evidências presentes na transcrição e, quando fornecidas, métricas observadas. Não invente contexto ou resultados. Trate relações entre conteúdo e desempenho apenas como hipóteses, nunca como causalidade. Seja conciso e escreva em português do Brasil. Classifique o formato do criativo em format, uma destas categorias: podcast (conversa de podcast), entrevista, caixa de perguntas (responde perguntas da audiencia), depoimento (cliente ou a propria pessoa contando resultado), dramatização (cena encenada), UGC (video espontaneo de usuaria, estilo celular sem producao), gravação de tela (tela do celular ou do computador), apresentador pra câmera (uma pessoa falando direto pra camera) ou outro.";
     const userText=`Transcrição do criativo:\n${job.transcript.slice(0,100000)}${performanceContext}`;
     // D-172: provedor de analise configuravel (OpenAI, Claude ou OpenRouter),
     // com reserva automatica pelos outros provedores quando configurados.
@@ -236,6 +237,7 @@ export async function processCreativeAnalysis(pool:pg.Pool,maxAttempts=5) {
     if (!result) throw primaryError ?? new Error("analysis_provider_failed");
     const analysis=result.analysis as {
       hook:string|null;promise:string|null;mechanism:string|null;cta:string|null;
+      format:string|null;
       proof:string[];objections:string[];structure:string[];
       performance_hypotheses:string[];evidence:string[];confidence:number;tags:string[];
     };
@@ -254,16 +256,16 @@ export async function processCreativeAnalysis(pool:pg.Pool,maxAttempts=5) {
         `insert into public.creative_analyses (
           organization_id,project_id,creative_id,creative_version_id,job_id,
           model,prompt_version,hook,promise,mechanism,proof,objections,cta,
-          structure,performance_hypotheses,evidence,confidence
+          structure,performance_hypotheses,evidence,confidence,format
         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,
-                  $14::jsonb,$15::jsonb,$16::jsonb,$17)
+                  $14::jsonb,$15::jsonb,$16::jsonb,$17,$18)
         on conflict (job_id) do nothing`,
         [job.organization_id,job.project_id,job.creative_id,job.creative_version_id,
          job.id,usedModel,job.prompt_version,analysis.hook,analysis.promise,
          analysis.mechanism,JSON.stringify(analysis.proof),JSON.stringify(analysis.objections),
          analysis.cta,JSON.stringify(analysis.structure),
          JSON.stringify(analysis.performance_hypotheses),JSON.stringify(analysis.evidence),
-         analysis.confidence]);
+         analysis.confidence,analysis.format ?? null]);
       await client.query(
         `insert into public.ai_usage_records(organization_id,project_id,job_id,
          model,operation,input_tokens,output_tokens,total_tokens,

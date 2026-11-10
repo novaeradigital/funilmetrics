@@ -14,7 +14,7 @@ const navigationGroups=[
  {key:"campaigns",label:"Campanhas",icon:"campaigns",items:[
   {href:"/dashboard/gerenciador-anuncios",label:"Gerenciador de anúncios"},
   {href:"/dashboard/campanhas/subir",label:"Subir campanhas"},
-  {href:"/dashboard/campanhas/publicacoes",label:"Publicações"}]},
+  {href:"/dashboard/campanhas/publicacoes",label:"Publicações"},{href:"/dashboard/inteligencia",label:"Inteligência"}]},
  {key:"tracking",label:"Rastreamento",icon:"funnel",items:[
   {href:"/dashboard/tracking",label:"Visão geral"},
   {href:"/dashboard/integracoes/tracking",label:"Fontes e script"},
