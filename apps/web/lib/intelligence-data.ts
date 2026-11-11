@@ -57,7 +57,7 @@ function actionSum(actionType: string): string {
 }
 
 function actionSumHalf(actionType: string, half: 1 | 2): string {
-  const cond = half === 1 ? "metric_date <= $6::date" : "metric_date > $6::date";
+  const cond = half === 1 ? "metric_date <= $5::date" : "metric_date > $5::date";
   return `sum(coalesce((
     select sum((elem ->> 'value')::numeric)
       from jsonb_array_elements(case when jsonb_typeof(actions) = 'array' then actions else '[]'::jsonb end) elem
@@ -224,9 +224,9 @@ export async function loadIntelligenceData(
          sum(video_thruplay_views)::text as thruplay,
          sum(video_p50_views)::text as p50,
          count(distinct metric_date) filter (where impressions > 0)::int as days_active,
-         coalesce(sum(impressions) filter (where $6::date is not null and metric_date <= $6::date), 0)::text as h1_impressions,
+         coalesce(sum(impressions) filter (where $5::date is not null and metric_date <= $5::date), 0)::text as h1_impressions,
          ${actionSumHalf("link_click", 1)} as h1_clicks,
-         coalesce(sum(impressions) filter (where $6::date is not null and metric_date > $6::date), 0)::text as h2_impressions,
+         coalesce(sum(impressions) filter (where $5::date is not null and metric_date > $5::date), 0)::text as h2_impressions,
          ${actionSumHalf("link_click", 2)} as h2_clicks
          from public.meta_ad_insights_daily
         where project_id = $1
@@ -235,7 +235,7 @@ export async function loadIntelligenceData(
           and ($3::date is null or metric_date <= $3::date)
           and ($4::uuid[] is null or meta_ad_account_id = any($4))
         group by external_ad_id`,
-      [projectId, from, to, accountIds, null, mid],
+      [projectId, from, to, accountIds, mid],
     )
   ).rows;
 
