@@ -973,11 +973,11 @@ export async function queueMetaSyncNow(formData:FormData){
          join public.memberships membership
            on membership.organization_id=connection.organization_id
           and membership.user_id=app_user.id
-         join public.meta_authorizations authorization
-           on authorization.connection_id=connection.id
+         join public.meta_authorizations meta_auth
+           on meta_auth.connection_id=connection.id
         where connection.id=$2 and connection.project_id=$3
           and connection.provider='meta_ads' and connection.status='active'
-          and authorization.status='active'
+          and meta_auth.status='active'
           and coalesce((select allowed.role_override
             from public.project_memberships allowed
             where allowed.membership_id=membership.id
@@ -999,7 +999,7 @@ export async function queueMetaSyncNow(formData:FormData){
          organization_id,project_id,connection_id,idempotency_key,status,
          scheduled_for,next_attempt_at
        ) select $1,$2,$3,
-           'manual:'||$3::text||':'||to_char(now() at time zone 'UTC',
+           'manual:'||$4::text||':'||to_char(now() at time zone 'UTC',
              'YYYY-MM-DD"T"HH24:MI'),
            'queued',now(),now()
         where not exists(
@@ -1008,7 +1008,7 @@ export async function queueMetaSyncNow(formData:FormData){
              and active.status in ('queued','running','failed_retryable')
         )
        on conflict(connection_id,idempotency_key) do nothing returning id`,
-      [scope.organization_id,projectId,connectionId],
+      [scope.organization_id,projectId,connectionId,connectionId],
     )).rows[0];
     if(inserted){
       await client.query(
