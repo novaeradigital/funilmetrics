@@ -1,6 +1,6 @@
 "use client";
 import {useMemo,useState,useTransition} from "react";
-import {createUpload,saveTemplate,generateCopies,getDestinationPages,getDestinationPixels,type DestinationPage,type DestinationPixel} from "./actions";
+import {createUpload,saveTemplate,generateCopies,getDestinationPages,getDestinationPixels,type DestinationPage,type DestinationPixel,type DestinationInstagram} from "./actions";
 import {expandStructure,resolveNamingPattern,resolveUtmParams,legacyUtmsToParams,DEFAULT_UTM_PARAMS,ALL_NAMING_VARIABLES,formatAgeRange,genderLabel,type NamingContext} from "../../../../lib/campaign-naming";
 import {CreativeImportPanel} from "../../criativos/creative-import-panel";
 import {useRouter} from "next/navigation";
@@ -12,7 +12,7 @@ export type WizardTemplate={id:string;name:string;config:Record<string,unknown>}
 type CopyModel={primaryText:string;headline:string;cta:string};
 const CTA_OPTIONS=["Saiba mais","Comprar agora","Cadastre-se","Quero começar","Entre em contato","Baixar agora"];
 type DestinationState={pageId:string;instagramId:string;pixelId:string;event:string};
-type PagesState={loading:boolean;error?:string;pages:DestinationPage[]};
+type PagesState={loading:boolean;error?:string;pages:DestinationPage[];instagramAccounts:DestinationInstagram[]};
 type PixelsState={loading:boolean;error?:string;pixels:DestinationPixel[]};
 
 const OBJECTIVES=[{value:"OUTCOME_SALES",label:"Vendas"},{value:"OUTCOME_LEADS",label:"Leads"},{value:"OUTCOME_TRAFFIC",label:"Tráfego"},{value:"OUTCOME_ENGAGEMENT",label:"Engajamento"},{value:"OUTCOME_AWARENESS",label:"Reconhecimento"}];
@@ -59,13 +59,13 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
   setSelectedAccounts(prev=>prev.includes(externalId)?prev.filter(a=>a!==externalId):[...prev,externalId]);
   setDestinations(prev=>prev[externalId]?prev:{...prev,[externalId]:{pageId:"",instagramId:"",pixelId:"",event:"Purchase"}});
   if(selecting&&!pagesByAccount[externalId]){
-   setPagesByAccount(prev=>({...prev,[externalId]:{loading:true,pages:[]}}));
+   setPagesByAccount(prev=>({...prev,[externalId]:{loading:true,pages:[],instagramAccounts:[]}}));
    getDestinationPages(externalId).then(result=>{
     setPagesByAccount(prev=>({...prev,[externalId]:result.ok
-     ?{loading:false,pages:result.pages??[]}
-     :{loading:false,error:result.error??"Nao foi possivel carregar as paginas.",pages:[]}}));
+     ?{loading:false,pages:result.pages??[],instagramAccounts:result.instagramAccounts??[]}
+     :{loading:false,error:result.error??"Nao foi possivel carregar as paginas.",pages:[],instagramAccounts:[]}}));
    }).catch(()=>{
-    setPagesByAccount(prev=>({...prev,[externalId]:{loading:false,error:"Nao foi possivel carregar as paginas.",pages:[]}}));
+    setPagesByAccount(prev=>({...prev,[externalId]:{loading:false,error:"Nao foi possivel carregar as paginas.",pages:[],instagramAccounts:[]}}));
    });
   }
   if(selecting&&!pixelsByAccount[externalId]){
@@ -83,7 +83,9 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
   const page=pagesByAccount[externalId]?.pages.find(entry=>entry.id===pageId);
   setDestinations(prev=>{
    const current=prev[externalId]??{pageId:"",instagramId:"",pixelId:"",event:"Purchase"};
-   const instagramOk=!current.instagramId||current.instagramId===(page?.instagramId??"__none__");
+   const knownInstagrams=pagesByAccount[externalId]?.instagramAccounts??[];
+   const instagramOk=!current.instagramId||current.instagramId===(page?.instagramId??"__none__")
+    ||knownInstagrams.some(entry=>entry.id===current.instagramId);
    return {...prev,[externalId]:{...current,pageId,instagramId:instagramOk?current.instagramId:""}};
   });
  }
@@ -200,7 +202,7 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
  const configJson=JSON.stringify(currentConfig());
  const canNext=[true,selectedAccounts.length>0,selectedCreatives.length>0,true,Boolean(adSet.destinationUrl)][step]??true;
 
- return <div>
+ return <div className="wizard-shell">
   <nav aria-label="Etapas da subida" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
    {["1. Destino","2. Criativos","3. Estrutura","4. Camp/Conj/anun","5. Copys e revisao"].map((label,index)=>
     <button key={label} type="button" className={step===index+1?"period-active":"secondary-button"}
@@ -212,10 +214,10 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
   {step===1&&<section className="dashboard-card">
    <h2>Destino</h2>
    <p>Selecione uma ou varias contas. Pagina, pixel e evento sao por conta.</p>
-   {accounts.map(account=><div key={account.externalId} style={{borderTop:"1px solid #eee",padding:"10px 0"}}>
+   {accounts.map(account=><div key={account.externalId} className="wz-option" style={{borderTop:"1px solid #eee",padding:"10px 0"}}>
     <label><input type="checkbox" checked={selectedAccounts.includes(account.externalId)}
      onChange={()=>toggleAccount(account.externalId)}/> <strong>{account.name}</strong> ({account.externalId}) {account.currency??""}</label>
-    {selectedAccounts.includes(account.externalId)&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+    {selectedAccounts.includes(account.externalId)&&<div className="wz-dest" style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
      <label>Pagina{pagesByAccount[account.externalId]?.loading
       ?<span>Carregando paginas...</span>
       :pagesByAccount[account.externalId]?.error
@@ -229,8 +231,11 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
      <label>Instagram<select value={destinations[account.externalId]?.instagramId??""}
       onChange={e=>setDestinations(p=>({...p,[account.externalId]:{...(p[account.externalId]??{pageId:"",pixelId:"",event:"Purchase"}),instagramId:e.target.value}}))}>
       <option value="">Sem Instagram (so Pagina)</option>
-      {(()=>{const sel=pagesByAccount[account.externalId]?.pages.find(page=>page.id===(destinations[account.externalId]?.pageId??""));
-       return sel?.instagramId?<option value={sel.instagramId}>@{sel.instagramUsername||sel.instagramId}</option>:null;})()}
+      {(()=>{const state=pagesByAccount[account.externalId];
+       const sel=state?.pages.find(page=>page.id===(destinations[account.externalId]?.pageId??""));
+       const rest=(state?.instagramAccounts??[]).filter(entry=>entry.id!==(sel?.instagramId??""));
+       return <>{sel?.instagramId?<option value={sel.instagramId}>@{sel.instagramUsername||sel.instagramId}</option>:null}
+        {rest.map(entry=><option key={entry.id} value={entry.id}>@{entry.username||entry.id}</option>)}</>;})()}
      </select></label>
      <label>Pixel{pixelsByAccount[account.externalId]?.loading
       ?<span>Carregando pixels...</span>
@@ -253,7 +258,7 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
   {step===2&&<section className="dashboard-card">
    <h2>Criativos da Biblioteca</h2>
    <p>Escolha os criativos prontos da Biblioteca ou envie arquivos novos aqui mesmo. Depois do processamento (antivirus), clique em Atualizar lista para eles aparecerem.</p>
-   <div style={{border:"1px dashed #ccc",borderRadius:8,padding:12,margin:"10px 0"}}>
+   <div className="wz-import" style={{border:"1px dashed #ccc",borderRadius:8,padding:12,margin:"10px 0"}}>
     <strong>Enviar arquivos agora</strong>
     <CreativeImportPanel folders={folders}/>
     <button type="button" className="secondary-button" onClick={()=>router.refresh()}>Atualizar lista</button>
@@ -265,7 +270,7 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
    </div>
    <label>Buscar criativo<input value={creativeSearch} onChange={e=>setCreativeSearch(e.target.value)} placeholder="Nome do criativo"/></label>
    <p>{visibleCreatives.length} criativo(s) visivel(is) · {selectedCreatives.length} selecionado(s)</p>
-   {visibleCreatives.map(creative=><div key={creative.id} style={{borderTop:"1px solid #eee",padding:"8px 0"}}>
+   {visibleCreatives.map(creative=><div key={creative.id} className="wz-option" style={{borderTop:"1px solid #eee",padding:"8px 0"}}>
     <label><input type="checkbox" checked={selectedCreatives.includes(creative.id)} onChange={()=>toggleCreative(creative.id)}/>
     <strong>{creative.name}</strong> ({creative.format}){creative.folderName?` · pasta ${creative.folderName}`:""} {creative.transcript?" · com transcricao":" · sem transcricao"}</label>
    </div>)}
@@ -369,7 +374,7 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
    <p><strong>{preview.totalCampaigns} campanha(s), {preview.totalAdSets} conjunto(s) e {preview.totalAds} anuncio(s)</strong> em {selectedAccounts.length} conta(s). A arvore abaixo mostra a primeira conta; as demais repetem a mesma estrutura.</p>
    {preview.repeatedCreative&&<p>Voce selecionou {selectedCreativeObjs.length} criativo(s), mas a estrutura pede mais anuncios por campanha: o mesmo criativo se repete em conjuntos diferentes. Numa 1-3-1, o comum e um criativo diferente por conjunto. Se a repeticao for intencional, tudo bem.</p>}
    {preview.duplicates>0&&<p role="alert">{preview.duplicates} nome(s) de anuncio duplicado(s) na previa. Ajuste a nomenclatura (por exemplo, com {"{sequencia}"}).</p>}
-   {preview.campaigns.map((campaign,campaignIndex)=><div key={campaignIndex} style={{border:"1px solid #ddd",borderRadius:8,padding:12,marginBottom:12}}>
+   {preview.campaigns.map((campaign,campaignIndex)=><div key={campaignIndex} className="wz-review" style={{border:"1px solid #ddd",borderRadius:8,padding:12,marginBottom:12}}>
     <strong>Campanha: {campaign.name}</strong>
     {campaign.adSets.map((adSetItem,adSetIndex)=><div key={adSetIndex} style={{marginLeft:16,marginTop:8}}>
      <div>Conjunto: {adSetItem.name}</div>
@@ -390,7 +395,7 @@ export function UploadWizard({accounts,creatives,templates,folders}:{
    </form>
   </section>}
 
-  <div style={{display:"flex",gap:8,marginTop:16}}>
+  <div className="wz-footer-nav" style={{display:"flex",gap:8,marginTop:16}}>
    {step>1&&<button type="button" className="secondary-button" onClick={()=>setStep(step-1)}>Voltar</button>}
    {step<5&&<button type="button" disabled={!canNext} onClick={()=>setStep(step+1)}>Continuar</button>}
   </div>

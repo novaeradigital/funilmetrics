@@ -119,7 +119,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Params>}
  const returnParams=new URLSearchParams(shared);returnParams.set("level",level);returnParams.set("page",String(page));
  const returnTo=`/dashboard/gerenciador-anuncios?${returnParams}`;
  const pageHref=(target:number)=>{const next=new URLSearchParams(returnParams);next.set("page",String(target));return `/dashboard/gerenciador-anuncios?${next}`;};
- return <main className="app-layout"><DashboardSidebar activeHref="/dashboard/gerenciador-anuncios"
+ return <main className="app-layout gm-page"><DashboardSidebar activeHref="/dashboard/gerenciador-anuncios"
   footerLabel="Meta Ads · operação protegida"/><section className="app-content">
   <DashboardTopbar returnTo="/dashboard/gerenciador-anuncios" statusLabel="Meta Ads · operação governada">
    <Link className="icon-button" href={`/dashboard/campanhas?${shared}`}>Analisar campanhas</Link>

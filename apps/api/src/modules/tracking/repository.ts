@@ -8,7 +8,8 @@ export type TrackingContext={ip?:string;userAgent?:string};
 export type TrackingSource={
  id:string;organization_id:string;project_id:string;allowed_origins:string[];
  business_project_id?:string|null;ic_trigger_type?:string|null;
- ic_trigger_value?:string|null;product_page?:boolean|null;
+ ic_trigger_value?:string|null;ic_triggers?:Array<{type:string;value:string|null;label:string}>|null;
+ product_page?:boolean|null;
  pixel_id?:string|null;pixel_mode?:string|null;pixel_active?:boolean|null;
  pixel_config?:Record<string,unknown>|null;event_id_prefix?:string|null;
 };
@@ -26,6 +27,7 @@ function metaCustomData(properties:Record<string,string|number|boolean|null>){
  const contentId=properties.contentId;
  if(typeof contentId==="string"&&contentId)data.content_ids=[contentId];
  if(typeof properties.contentName==="string"&&properties.contentName)data.content_name=properties.contentName;
+ if(typeof properties.trigger_label==="string"&&properties.trigger_label)data.trigger_label=properties.trigger_label;
  if(typeof properties.contentType==="string"&&properties.contentType)data.content_type=properties.contentType;
  else if(data.content_ids)data.content_type="product";
  if(typeof properties.value==="number"&&Number.isFinite(properties.value))data.value=properties.value;
@@ -39,7 +41,7 @@ export function createTrackingRepository(pool:Queryable){
    return (await pool.query<TrackingSource>(`
     select s.id,s.organization_id,s.project_id,s.allowed_origins,
       s.business_project_id::text as business_project_id,s.ic_trigger_type,
-      s.ic_trigger_value,s.product_page,
+      s.ic_trigger_value,s.ic_triggers,s.product_page,
       p.pixel_id,p.mode as pixel_mode,p.active as pixel_active,
       p.config as pixel_config,p.event_id_prefix
       from public.tracking_sources s

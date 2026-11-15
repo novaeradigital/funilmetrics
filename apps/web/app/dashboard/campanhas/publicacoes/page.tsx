@@ -40,7 +40,7 @@ export default async function PublicacoesPage({searchParams}:{searchParams:Promi
   const list=byUpload.get(item.upload_id)??[];list.push(item);byUpload.set(item.upload_id,list);
  }
  return (
-  <main className="app-layout">
+  <main className="app-layout pub-page">
    <DashboardSidebar activeHref="/dashboard/campanhas/publicacoes" footerLabel="Publicações"/>
    <section className="app-content">
     <DashboardTopbar returnTo="/dashboard/campanhas/publicacoes" statusLabel="Modulo Campanhas" statusTone="default"><span/></DashboardTopbar>
@@ -49,25 +49,26 @@ export default async function PublicacoesPage({searchParams}:{searchParams:Promi
       <div><p className="eyebrow">Campanhas</p><h1>Publicações</h1>
       <p className="dashboard-context">Acompanhe cada subida: o que ja foi criado na Meta, o que falhou e o que falta. A retentativa reaproveita o que ja foi criado e tenta de novo so o que falhou.</p></div>
      </header>
-     {query.status==="retried"&&<p>Publicacao recolocada na fila.</p>}
-     {!uploads.length&&<section className="dashboard-card"><p>Nenhuma publicacao ainda. Monte a primeira em Subir campanhas.</p></section>}
-     {uploads.map(upload=><section key={upload.id} className="dashboard-card" style={{marginBottom:16}}>
-      <h2>{STATUS_LABEL[upload.status]??upload.status} · envio {upload.send_mode==="draft"?"rascunho":upload.send_mode==="paused"?"pausado":"ativo"}</h2>
-      <p>{new Date(upload.created_at).toLocaleString("pt-BR")} · por {upload.created_by||"equipe"}
+     {query.status==="retried"&&<p className="pub-notice">Publicacao recolocada na fila.</p>}
+     {!uploads.length&&<section className="dashboard-card pub-empty"><p>Nenhuma publicacao ainda. Monte a primeira em Subir campanhas.</p></section>}
+     {uploads.map(upload=><section key={upload.id} className="dashboard-card pub-upload">
+      <div className="pub-head"><h2>{STATUS_LABEL[upload.status]??upload.status}</h2>
+      <span className={`pub-chip is-${upload.status}`}>envio {upload.send_mode==="draft"?"rascunho":upload.send_mode==="paused"?"pausado":"ativo"}</span></div>
+      <p className="pub-meta">{new Date(upload.created_at).toLocaleString("pt-BR")} · por {upload.created_by||"equipe"}
        {" · "}{upload.summary?.campaigns??0} campanha(s), {upload.summary?.adSets??0} conjunto(s), {upload.summary?.ads??0} anuncio(s)
        {upload.summary?.createdItems!==undefined?` · ${upload.summary.createdItems} criado(s), ${upload.summary.failedItems??0} com falha`:""}</p>
-      {upload.error_message&&<p role="alert">{upload.error_message}</p>}
+      {upload.error_message&&<p role="alert" className="pub-error">{upload.error_message}</p>}
       {(upload.status==="partial"||upload.status==="failed")&&<form action={retryUpload}>
        <input type="hidden" name="upload_id" value={upload.id}/>
        <button type="submit" className="secondary-button">Tentar de novo o que falhou</button>
       </form>}
-      <table>
+      <div className="pub-table-wrap"><table className="pub-table">
        <thead><tr><th>Nivel</th><th>Nome</th><th>Criativo</th><th>Conta</th><th>Status</th><th>ID na Meta</th><th>Erro</th></tr></thead>
        <tbody>{(byUpload.get(upload.id)??[]).map(item=><tr key={item.id}>
-        <td>{LEVEL_LABEL[item.level]??item.level}</td><td>{item.name}</td><td>{item.creative_name??""}</td><td>{item.account_external_id}</td>
-        <td>{STATUS_LABEL[item.status]??item.status}{item.status==="creating"&&item.payload?.stage?<div style={{fontSize:12,opacity:0.75}}>{item.payload.stage}</div>:null}</td><td>{item.external_id??""}</td><td>{item.error_message??""}</td>
+        <td><span className="pub-level">{LEVEL_LABEL[item.level]??item.level}</span></td><td className="pub-name">{item.name}</td><td>{item.creative_name??""}</td><td className="pub-mono">{item.account_external_id}</td>
+        <td><span className={`pub-pill is-${item.status}`}>{STATUS_LABEL[item.status]??item.status}</span>{item.status==="creating"&&item.payload?.stage?<div className="pub-stage">{item.payload.stage}</div>:null}</td><td className="pub-mono">{item.external_id??""}</td><td className="pub-cell-error">{item.error_message??""}</td>
        </tr>)}</tbody>
-      </table>
+      </table></div>
      </section>)}
     </div>
    </section>

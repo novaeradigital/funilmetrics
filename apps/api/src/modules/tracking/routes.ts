@@ -17,13 +17,26 @@ const body=z.object({events:z.array(event).min(1).max(25)});
 const params=z.object({publicKey:z.uuid()});
 const bot=/bot|crawler|spider|headless|preview/i;
 
+const triggerTypes=new Set(["attribute","selector","id","url","url_part","domain"]);
+type IcRule={type:string;value:string|null;label:string};
+function normalizeRules(source:TrackingSource):IcRule[]{
+ const raw=Array.isArray(source.ic_triggers)?source.ic_triggers:[];
+ const rules:IcRule[]=[];
+ for(const item of raw){
+  if(!item||typeof item!=="object")continue;
+  const type=typeof item.type==="string"&&triggerTypes.has(item.type)?item.type:"attribute";
+  rules.push({type,value:typeof item.value==="string"&&item.value?item.value:null,
+   label:typeof item.label==="string"?item.label.slice(0,80):""});
+ }
+ if(rules.length)return rules;
+ return [{type:source.ic_trigger_type??"attribute",value:source.ic_trigger_value??null,label:""}];
+}
 function scriptConfig(source:TrackingSource){
  const pixelOn=Boolean(source.pixel_id&&source.pixel_active&&source.pixel_mode!=="off");
  return {
   pixelId:pixelOn?source.pixel_id:null,
   mode:pixelOn?(source.pixel_mode??"api"):"off",
-  icTriggerType:source.ic_trigger_type??"attribute",
-  icTriggerValue:source.ic_trigger_value??null,
+  icTriggers:normalizeRules(source),
   productPage:Boolean(source.product_page),
  };
 }
@@ -57,26 +70,38 @@ const decorate=a=>{try{const u=new URL(a.href);u.searchParams.set("sck",token);i
 const once=(key,fn)=>{try{if(sessionStorage.getItem(key)==="1")return;sessionStorage.setItem(key,"1")}catch{}fn()};
 const fireIc=()=>once("fm_ic_"+location.pathname,()=>track("initiate_checkout"));
 const byId=(t,v)=>{let n=t;while(n){if(n.id===v)return n;n=n.parentElement}return null};
+const RULES=Array.isArray(CFG.icTriggers)?CFG.icTriggers:[];
+const hostOf=v=>{try{return new URL(v).hostname}catch{const s=String(v||"").split("://")[1]||String(v||"");return s.split("/")[0].split(":")[0]}};
+const anchorOf=t=>t.closest?.("a[href]")||(t.tagName==="A"?t:null);
+const ruleMatches=(r,t)=>{const a=anchorOf(t);
+if(r.type==="attribute")return Boolean(t.closest?.('[data-fm-evento="InitiateCheckout"]'));
+if(!r.value)return false;
+if(r.type==="selector"){try{return Boolean(t.closest?.(r.value))}catch{return false}}
+if(r.type==="id")return Boolean(byId(t,r.value));
+if(r.type==="url"||r.type==="url_part")return Boolean(a&&a.href.includes(r.value));
+if(r.type==="domain")return Boolean(a&&hostOf(a.href)===hostOf(r.value));
+return false};
+const matchRule=t=>{for(const r of RULES)if(ruleMatches(r,t))return r;return null};
+const fireRule=r=>once("fm_ic_"+location.pathname,()=>track("initiate_checkout",{trigger_type:r.type,trigger_value:r.value||null,trigger_label:r.label||null}));
 const bind=()=>{
 track("page_view");
 if(CFG.productPage)track("view_content");
-if(CFG.icTriggerType==="url"&&CFG.icTriggerValue&&location.href.includes(CFG.icTriggerValue))fireIc();
-if(CFG.icTriggerType==="selector"&&CFG.icTriggerValue){try{document.querySelectorAll(CFG.icTriggerValue).forEach(el=>{const a=el.closest?.("a[href]")||(el.tagName==="A"?el:null);if(a)decorate(a)})}catch{}}
-if(CFG.icTriggerType==="url"&&CFG.icTriggerValue){document.querySelectorAll("a[href]").forEach(a=>{if(a.href.includes(CFG.icTriggerValue))decorate(a)})}
+for(const r of RULES){if((r.type==="url"||r.type==="url_part")&&r.value&&location.href.includes(r.value)){fireRule(r);break}}
+for(const r of RULES){
+if(r.type==="selector"&&r.value){try{document.querySelectorAll(r.value).forEach(el=>{const a=el.closest?.("a[href]")||(el.tagName==="A"?el:null);if(a)decorate(a)})}catch{}}
+if((r.type==="url"||r.type==="url_part")&&r.value){document.querySelectorAll("a[href]").forEach(a=>{if(a.href.includes(r.value))decorate(a)})}
+if(r.type==="domain"&&r.value){document.querySelectorAll("a[href]").forEach(a=>{if(hostOf(a.href)===hostOf(r.value))decorate(a)})}}
 document.querySelectorAll("video").forEach(v=>{if(sent.has(v))return;
 sent.set(v,new Set());v.addEventListener("play",()=>track("video_play"));v.addEventListener("timeupdate",()=>{if(!v.duration)return;
 const n=Math.floor(v.currentTime/v.duration*100),set=sent.get(v);for(const p of [25,50,75])if(n>=p&&!set.has(p)){set.add(p);track("video_progress_"+p,{videoId:v.id||null})}});
 v.addEventListener("ended",()=>track("video_complete",{videoId:v.id||null}))});
 document.addEventListener("click",e=>{const t=e.target;
+const matched=matchRule(t);
 const evEl=t.closest?.("[data-fm-evento]");
 if(evEl){const name=evEl.getAttribute("data-fm-evento");const map={InitiateCheckout:"initiate_checkout",ViewContent:"view_content",PageView:"page_view"};const type=map[name];
-if(type==="initiate_checkout")fireIc();else if(type)track(type);
+if(type==="initiate_checkout"){if(matched)fireRule(matched);else fireIc()}else if(type)track(type);
 const a=evEl.closest?.("a[href]")||(evEl.tagName==="A"?evEl:null);if(a)decorate(a)}
-let trig=false;
-if(CFG.icTriggerType==="selector"&&CFG.icTriggerValue){try{trig=Boolean(t.closest?.(CFG.icTriggerValue))}catch{}}
-if(CFG.icTriggerType==="id"&&CFG.icTriggerValue){trig=Boolean(byId(t,CFG.icTriggerValue))}
-if(CFG.icTriggerType==="url"&&CFG.icTriggerValue){const a=t.closest?.("a[href]");trig=Boolean(a&&a.href.includes(CFG.icTriggerValue))}
-if(trig){fireIc();const a=t.closest?.("a[href]");if(a)decorate(a)}
+if(matched){fireRule(matched);const a=anchorOf(t);if(a)decorate(a)}
 const c=t.closest?.("[data-fm-cta]");if(c){const a=c.closest?.("a[href]");if(a)decorate(a);
 track("cta_click",{label:c.getAttribute("data-fm-cta")||null})}});
 document.addEventListener("submit",e=>track("form_submit",{formId:e.target.id||null}),true)};

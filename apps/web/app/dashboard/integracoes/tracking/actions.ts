@@ -3,14 +3,23 @@ import {redirect} from "next/navigation";import {revalidatePath} from "next/cach
 import {createClient} from "../../../../lib/supabase/server";import {getActiveProject} from "../../../../lib/active-project";
 import {getDatabase} from "../../../../lib/database";
 const allowedRoles=new Set(["owner","administrator"]);
-const triggerTypes=new Set(["attribute","selector","id","url"]);
+const triggerTypes=new Set(["attribute","selector","id","url","url_part","domain"]);
 function trackingMetaFields(formData:FormData){
  const businessId=String(formData.get("business_project_id")??"");
- const triggerType=String(formData.get("ic_trigger_type")??"attribute");
- const triggerValue=String(formData.get("ic_trigger_value")??"").trim().slice(0,300);
+ const types=formData.getAll("ic_trigger_type").map(value=>String(value));
+ const values=formData.getAll("ic_trigger_value").map(value=>String(value).trim().slice(0,300));
+ const labels=formData.getAll("ic_trigger_label").map(value=>String(value).trim().slice(0,80));
+ const triggers:{type:string;value:string|null;label:string}[]=[];
+ for(let i=0;i<types.length;i++){
+  const type=triggerTypes.has(types[i]!)?types[i]!:"attribute";
+  const value=values[i]??"";
+  if(type!=="attribute"&&!value)continue;
+  triggers.push({type,value:value||null,label:labels[i]??""});
+ }
+ if(!triggers.length)triggers.push({type:"attribute",value:null,label:""});
  return {businessId:/^[0-9a-f-]{36}$/i.test(businessId)?businessId:null,
-  triggerType:triggerTypes.has(triggerType)?triggerType:"attribute",
-  triggerValue:triggerValue||null,productPage:formData.get("product_page")==="on"};
+  triggers,triggerType:triggers[0]!.type,triggerValue:triggers[0]!.value,
+  productPage:formData.get("product_page")==="on"};
 }
 export async function createTrackingSource(formData:FormData){
  const meta=trackingMetaFields(formData);
@@ -25,9 +34,9 @@ export async function createTrackingSource(formData:FormData){
  const client=await db.pool.connect();try{await client.query("begin");
   const row=(await client.query<{id:string}>(`insert into public.tracking_sources(organization_id,
    project_id,name,allowed_origins,created_by_user_id,business_project_id,
-   ic_trigger_type,ic_trigger_value,product_page) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id`,
+   ic_trigger_type,ic_trigger_value,product_page,ic_triggers) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) returning id`,
    [project.organization_id,project.id,name,origins,actor.id,meta.businessId,
-   meta.triggerType,meta.triggerValue,meta.productPage])).rows[0]!;
+   meta.triggerType,meta.triggerValue,meta.productPage,JSON.stringify(meta.triggers)])).rows[0]!;
   await client.query(`insert into public.audit_logs(organization_id,project_id,actor_user_id,
    action,target_type,target_id,after) values($1,$2,$3,'tracking_source_created',
    'tracking_source',$4,$5::jsonb)`,[project.organization_id,project.id,actor.id,row.id,
@@ -59,9 +68,9 @@ export async function updateTrackingSource(formData:FormData){
   redirect("/dashboard/integracoes/tracking?status=forbidden");
  const db=getDatabase(),actor=(await db.pool.query<{id:string}>("select id from public.users where auth_user_id=$1",[data.user.id])).rows[0]!;
  const row=(await db.pool.query<{id:string}>(`update public.tracking_sources set business_project_id=$1,
-  ic_trigger_type=$2,ic_trigger_value=$3,product_page=$4,updated_at=now()
-  where id=$5 and project_id=$6 returning id`,[meta.businessId,meta.triggerType,meta.triggerValue,
-  meta.productPage,id,project.id])).rows[0];
+  ic_trigger_type=$2,ic_trigger_value=$3,product_page=$4,ic_triggers=$5::jsonb,updated_at=now()
+  where id=$6 and project_id=$7 returning id`,[meta.businessId,meta.triggerType,meta.triggerValue,
+  meta.productPage,JSON.stringify(meta.triggers),id,project.id])).rows[0];
  if(!row)redirect("/dashboard/integracoes/tracking?status=not-found");
  await db.pool.query(`insert into public.audit_logs(organization_id,project_id,actor_user_id,
   action,target_type,target_id,after) values($1,$2,$3,'tracking_source_updated',

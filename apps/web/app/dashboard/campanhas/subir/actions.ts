@@ -264,7 +264,8 @@ async function callAnthropic(apiKey:string,model:string,prompt:string):Promise<C
 }
 
 export type DestinationPage={id:string;name:string;instagramId:string;instagramUsername:string};
-export async function getDestinationPages(accountExternalId:string):Promise<{ok:boolean;error?:string;pages?:DestinationPage[]}>{
+export type DestinationInstagram={id:string;username:string};
+export async function getDestinationPages(accountExternalId:string):Promise<{ok:boolean;error?:string;pages?:DestinationPage[];instagramAccounts?:DestinationInstagram[]}>{
  const actor=await requireEditor();
  const db=getDatabase();
  const account=(await db.pool.query<{connection_id:string}>(
@@ -284,10 +285,20 @@ export async function getDestinationPages(accountExternalId:string):Promise<{ok:
  if(!granted.has("pages_show_list"))
   return {ok:false,error:"O perfil desta conta ainda nao tem a permissao de Paginas. Reconecte a Meta em Integracoes para liberar a lista."};
  const pages=new Map<string,DestinationPage>();
+ const instagrams=new Map<string,DestinationInstagram>();
+ const addInstagram=(raw:unknown)=>{
+  const ig=raw as {id?:string;username?:string}|undefined;
+  const id=String(ig?.id??"");
+  if(!id)return;
+  const username=String(ig?.username??"");
+  const previous=instagrams.get(id);
+  if(!previous||(!previous.username&&username))instagrams.set(id,{id,username});
+ };
  const addPage=(raw:Record<string,unknown>)=>{
   const id=String(raw.id??"");
   if(!id||pages.has(id))return;
   const ig=(raw.instagram_business_account??raw.connected_instagram_account) as {id?:string;username?:string}|undefined;
+  addInstagram(ig);
   pages.set(id,{id,name:String(raw.name??id),instagramId:String(ig?.id??""),instagramUsername:String(ig?.username??"")});
  };
  const fields="id,name,instagram_business_account{id,username},connected_instagram_account{id,username}";
@@ -299,8 +310,15 @@ export async function getDestinationPages(accountExternalId:string):Promise<{ok:
    const res=await graph(`${business.id}/${kind}?fields=${fields}&limit=100`).catch(()=>null);
    for(const page of (res?.data??[]) as Array<Record<string,unknown>>)addPage(page);
   }
+  for(const kind of ["owned_instagram_accounts","client_instagram_accounts"]){
+   const res=await graph(`${business.id}/${kind}?fields=id,username&limit=100`).catch(()=>null);
+   for(const ig of (res?.data??[]) as Array<Record<string,unknown>>)addInstagram(ig);
+  }
  }
- return {ok:true,pages:[...pages.values()].sort((a,b)=>a.name.localeCompare(b.name))};
+ const accountInstagrams=await graph(`${accountExternalId}/instagram_accounts?fields=id,username&limit=100`).catch(()=>null);
+ for(const ig of (accountInstagrams?.data??[]) as Array<Record<string,unknown>>)addInstagram(ig);
+ return {ok:true,pages:[...pages.values()].sort((a,b)=>a.name.localeCompare(b.name)),
+  instagramAccounts:[...instagrams.values()].sort((a,b)=>(a.username||a.id).localeCompare(b.username||b.id))};
 }
 
 export type DestinationPixel={id:string;name:string};

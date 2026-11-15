@@ -257,7 +257,7 @@ export default async function InteligenciaPage({ searchParams }: PageProps) {
   }
 
   return (
-    <main className="app-layout">
+    <main className="app-layout intel-page">
       <DashboardSidebar activeHref="/dashboard/inteligencia" />
       <section className="app-content">
         <DashboardTopbar returnTo="/dashboard/inteligencia" />

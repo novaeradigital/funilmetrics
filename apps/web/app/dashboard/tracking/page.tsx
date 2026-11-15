@@ -60,7 +60,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{period?
   where conversion.project_id=$1 and conversion.first_observed_at>=now()-($2*interval '1 day')
   and ($3='' or conversion.tracking_source_id::text=$3)`,values)).rows[0]!;
  const rate=(value:number)=>summary.video_plays?`${(value/summary.video_plays*100).toFixed(1)}%`:"—";
- return <main className="app-layout"><DashboardSidebar activeHref="/dashboard/tracking" footerLabel="Tracking próprio"/>
+ return <main className="app-layout tracking-page"><DashboardSidebar activeHref="/dashboard/tracking" footerLabel="Tracking próprio"/>
  <section className="app-content"><DashboardTopbar returnTo="/dashboard/tracking" statusLabel="Tracking próprio"/><div className="dashboard-main"><TrackingTabs active="overview" />
  <header className="dashboard-titlebar"><div><p className="eyebrow">Tracking próprio · regra v1</p><h1>Rastreamento</h1>
  <p className="dashboard-context">Comportamento observado nas fontes do projeto. Bots ficam fora dos indicadores principais.</p></div>
