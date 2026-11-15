@@ -9,7 +9,7 @@ import { setBusinessAssociation } from "../association-actions";
 
 export const dynamic = "force-dynamic";
 
-const providerLabels: Record<string, string> = { lastlink: "Lastlink", configcheckout: "Checkout próprio" };
+const providerLabels: Record<string, string> = { lastlink: "Lastlink", configcheckout: "Checkout próprio", chatsx: "ChatSX" };
 
 export default async function UnassignedPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const query = await searchParams;
@@ -25,7 +25,7 @@ export default async function UnassignedPage({ searchParams }: { searchParams: P
   type Item = { id: string; name: string; detail: string };
   const [accounts, connections, products, folders, creatives, businessProjects] = await Promise.all([
     database.pool.query<Item>(`select id, name, '' as detail from public.meta_ad_accounts where project_id = $1 and business_project_id is null order by name`, [project.id]),
-    database.pool.query<Item>(`select connection.id, connection.name, connection.provider as detail from public.connections connection where connection.project_id = $1 and connection.business_project_id is null and (connection.provider in ('lastlink','configcheckout') or exists(select 1 from public.commerce_orders orders where orders.connection_id = connection.id)) order by connection.provider, connection.name`, [project.id]),
+    database.pool.query<Item>(`select connection.id, connection.name, connection.provider as detail from public.connections connection where connection.project_id = $1 and connection.business_project_id is null and (connection.provider in ('lastlink','configcheckout','chatsx') or exists(select 1 from public.commerce_orders orders where orders.connection_id = connection.id)) order by connection.provider, connection.name`, [project.id]),
     database.pool.query<Item>(`select product.id, product.name, connection.name as detail from public.commerce_products product join public.connections connection on connection.id = product.connection_id where product.project_id = $1 and product.data_scope = 'production' and coalesce(product.business_project_id, connection.business_project_id) is null order by product.name`, [project.id]),
     database.pool.query<Item>(`select id, name, '' as detail from public.creative_folders where project_id = $1 and business_project_id is null order by name`, [project.id]),
     database.pool.query<Item>(`select creative.id, creative.name, coalesce(folder.name, '') as detail from public.creatives creative left join public.creative_folders folder on folder.id = creative.folder_id where creative.project_id = $1 and coalesce(creative.business_project_id, folder.business_project_id) is null order by creative.name`, [project.id]),

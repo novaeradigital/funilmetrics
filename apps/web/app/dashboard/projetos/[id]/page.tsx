@@ -11,7 +11,7 @@ import { AssociationPicker, type PickerGroup } from "../association-picker";
 export const dynamic = "force-dynamic";
 
 const uuidPattern = /^[0-9a-f-]{36}$/i;
-const providerLabels: Record<string, string> = { lastlink: "Lastlink", configcheckout: "Checkout próprio" };
+const providerLabels: Record<string, string> = { lastlink: "Lastlink", configcheckout: "Checkout próprio", chatsx: "ChatSX" };
 
 export default async function BusinessProjectPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
@@ -41,7 +41,7 @@ export default async function BusinessProjectPage({ params, searchParams }: {
   type Creative = { id: string; name: string; folder_name: string | null; own_id: string | null; effective_id: string | null };
   const [accounts, connections, products, folders, creatives, businessProjects] = await Promise.all([
     database.pool.query<Account>(`select id, name, business_project_id::text as business_project_id from public.meta_ad_accounts where project_id = $1 order by name`, [project.id]),
-    database.pool.query<Connection>(`select connection.id, connection.provider, connection.name, connection.business_project_id::text as business_project_id from public.connections connection where connection.project_id = $1 and (connection.provider in ('lastlink','configcheckout') or exists(select 1 from public.commerce_orders orders where orders.connection_id = connection.id)) order by connection.provider, connection.name`, [project.id]),
+    database.pool.query<Connection>(`select connection.id, connection.provider, connection.name, connection.business_project_id::text as business_project_id from public.connections connection where connection.project_id = $1 and (connection.provider in ('lastlink','configcheckout','chatsx') or exists(select 1 from public.commerce_orders orders where orders.connection_id = connection.id)) order by connection.provider, connection.name`, [project.id]),
     database.pool.query<Product>(`select product.id, product.name, connection.name as connection_name, product.business_project_id::text as override_id, coalesce(product.business_project_id, connection.business_project_id)::text as effective_id from public.commerce_products product join public.connections connection on connection.id = product.connection_id where product.project_id = $1 and product.data_scope = 'production' order by product.name`, [project.id]),
     database.pool.query<Folder>(`select folder.id, folder.name, folder.business_project_id::text as business_project_id, (select count(*)::int from public.creatives creative where creative.folder_id = folder.id) as creatives from public.creative_folders folder where folder.project_id = $1 order by folder.name`, [project.id]),
     database.pool.query<Creative>(`select creative.id, creative.name, folder.name as folder_name, creative.business_project_id::text as own_id, coalesce(creative.business_project_id, folder.business_project_id)::text as effective_id from public.creatives creative left join public.creative_folders folder on folder.id = creative.folder_id where creative.project_id = $1 order by creative.name`, [project.id]),

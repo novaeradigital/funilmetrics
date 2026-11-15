@@ -271,6 +271,118 @@ duplicados, backlog, falhas, quarentena e último evento. Do lado do
 ConfigCheckout, a linha da integração mostra o último evento enviado e
 quando ele foi aceito.
 
+## ChatSX
+
+Objetivo: pedidos, compradores, produtos, pagamentos, estornos e atribuição
+das vendas avulsas do ChatSX (checkout próprio com AppMax/Asaas), para
+análise nos dashboards sem depender dos dados crus do gateway. A fonte é
+o ChatSX, não o gateway direto: o pedido no ChatSX já guarda o contexto
+de marketing do lead (UTMs do cadastro), que o gateway sozinho não devolve.
+
+Decisões:
+
+- Recorrência NÃO é contabilizada, por decisão do Willian (2026-11-15):
+  só entram planos avulsos (`unico_15`, `unico_30`). O emissor do ChatSX
+  não envia nada de planos recorrentes, e o normalizador bloqueia
+  qualquer evento com `plan.kind: "recorrente"` (`recurring_out_of_scope`).
+- Módulo próprio `chatsx`, espelhando o ConfigCheckout (checkout próprio,
+  contrato versionado), em vez de reutilizar o contrato do ConfigCheckout:
+  misturar as fontes poluiria as métricas e a página da integração.
+- Guardar o payload bruto antes de normalizar (mesmo padrão da Lastlink
+  e do ConfigCheckout).
+- Uma conexão por projeto: o ChatSX cola a URL e o token da conexão no
+  `.env` do servidor (`FUNILMETRICS_WEBHOOK_URL` e
+  `FUNILMETRICS_WEBHOOK_TOKEN`).
+- Contrato próprio e versionado (`version: 1`), porque os dois lados são
+  mantidos pelo mesmo time.
+
+### Autenticação
+
+O ChatSX envia o header `x-chatsx-token`. O valor é segredo, definido por
+quem cria a conexão no Funil Metrics, salvo aqui somente como hash
+(scrypt) e no ChatSX só no `.env` do servidor. Rotação mantém o token
+anterior válido por 24 horas. Depois de salvo, o valor completo não é
+exibido em nenhum dos dois painéis.
+
+### Envelope do webhook
+
+`POST /webhooks/chatsx/:connectionPublicId` com o corpo:
+
+- `id`: id determinístico do evento, `chatsx:assinatura:<id>:<tipo>` —
+  o mesmo id é reutilizado nas retentativas, então reentrega não cria
+  fato novo.
+- `type`: um dos eventos do catálogo abaixo.
+- `version`: versão do contrato (atual: 1).
+- `occurred_at`: quando o evento aconteceu, com fuso.
+- `test`: verdadeiro quando o gateway está em sandbox (Asaas `sandbox`
+  ou AppMax sandbox); eventos de teste não alimentam métricas de produção.
+- `order`: retrato completo do pedido no momento do evento (comprador com
+  e-mail, nome, telefone e CPF; produto = plano; valores subtotal e total
+  como texto decimal; método e parcelas; ids do gateway
+  (`payment_id`, `subscription_id`, `customer_id`); `checkout` fixo
+  `chatsx`; `plan` com chave, rótulo e tipo; atribuição com `utm` no
+  formato gravado no lead (`utm_source`, `utm_medium`, `utm_campaign`,
+  `utm_content`, `utm_term`) e `domain` `sx.rotasdigital.com.br`).
+
+Payload anonimizado de referência: `docs/payloads/chatsx/`.
+
+### Eventos do catálogo
+
+- `order.created`: pedido avulso criado no checkout (pendente).
+- `payment.confirmed`: pagamento avulso confirmado (cartão ou PIX).
+- `order.refunded`: pedido avulso estornado.
+- `order.chargeback`: pedido avulso em chargeback.
+
+Tipos desconhecidos e versões não suportadas são guardados em quarentena,
+nunca normalizados.
+
+### Mapeamento para eventos internos
+
+- `order.created` vira `payment_pending` (pedido e pagamento pendentes),
+  sem efeito financeiro.
+- `payment.confirmed` vira `payment_approved`, com efeito financeiro de
+  aprovação sobre o total do pedido.
+- `order.refunded` vira `payment_refunded`, com efeito de reversão.
+- `order.chargeback` vira `payment_chargeback`, com efeito de reversão.
+
+A identidade do pedido entre eventos é o `token` do pedido no ChatSX
+(`assinatura:<id>`). A pessoa é resolvida por e-mail, telefone e documento
+(CPF). A oferta interna é o checkout (`checkout:chatsx`). A data do evento
+usa `paid_at` na confirmação (`payment_date`), `created_at` na criação e
+`occurred_at` nos demais.
+
+### Idempotência e retentativas
+
+- O `id` do evento é a chave de idempotência: reentregas do mesmo evento
+  são reconhecidas e não criam fato novo.
+- O ChatSX envia por job em fila com até 3 tentativas e espera crescente.
+  Falha de rede ou 5xx gera nova tentativa; o Funil Metrics responde 202
+  na aceitação e 200 na duplicidade.
+- O efeito financeiro é aplicado uma única vez por pagamento, pela mesma
+  régua das demais fontes.
+
+### Limitações conhecidas
+
+- O ChatSX não informa comissão do produtor: o efeito financeiro de
+  comissão fica ausente (`producer_commission_missing`) e a base
+  governada de receita por comissão marca a cobertura como parcial para
+  esta fonte. A base por valor total da venda está completa.
+- Recorrência fora do escopo: assinatura, renovação, cancelamento e
+  vencimento não entram; a renovação aparece apenas como ausência de
+  novas vendas avulsas.
+- Atribuição fraca: as UTMs são as do cadastro do lead, não as da sessão
+  de compra; não há `fbp`/`fbc` nem `visitor_id` no ChatSX. As
+  visualizações e o `initiate_checkout` chegam pelo script de tracking
+  próprio (fonte separada), quando configurado no ChatSX.
+- Sem carga histórica na v1: valem os eventos a partir da ativação da
+  conexão.
+
+### Saúde operacional implementada
+
+A página da integração (Integrações, ChatSX) consolida por conexão os
+mesmos indicadores das demais fontes: eventos recebidos, normalizados,
+duplicados, backlog, falhas, quarentena e último evento.
+
 ## Google Drive
 
 ## Cofre central no painel

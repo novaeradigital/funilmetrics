@@ -111,6 +111,32 @@ Para datas financeiras:
 O mesmo `PaymentId` pode atravessar vários estados. Reembolso e chargeback
 permanecem como eventos separados, com reconciliação para impedir dupla dedução.
 
+### Mapeamento do ChatSX
+
+| Evento externo | Evento normalizado | Efeito financeiro |
+|---|---|---|
+| `order.created` | `payment_pending` | nenhum |
+| `payment.confirmed` | `payment_approved` | reconhecer receita bruta |
+| `order.refunded` | `payment_refunded` | reduzir receita líquida |
+| `order.chargeback` | `payment_chargeback` | reduzir receita líquida |
+
+Somente planos avulsos (`unico_15`, `unico_30`) entram. Planos recorrentes
+(`assinatura_stories`, `assinatura_premium`) não são enviados pelo ChatSX e,
+se chegarem, são bloqueados na normalização (`recurring_out_of_scope`).
+
+A identidade do pedido entre eventos é o `token` (`assinatura:<id>`). A
+pessoa é resolvida por e-mail, telefone e CPF. `test: true` (gateway em
+sandbox) marca o escopo `test`, fora das métricas de produção.
+
+Para datas financeiras:
+
+- `payment_approved` prefere `paid_at` do pedido.
+- `payment_refunded` e `payment_chargeback` usam `occurred_at` do evento.
+- `payment_pending` prefere `created_at` do pedido.
+
+Reembolso e chargeback do mesmo pagamento usam a mesma régua de efeito
+único das demais fontes, para impedir dupla dedução.
+
 ### Anúncios
 
 - `ad_metrics_snapshot`

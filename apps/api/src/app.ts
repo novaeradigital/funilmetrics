@@ -27,6 +27,11 @@ import {
   type ConfigCheckoutRepository,
 } from "./modules/configcheckout/repository.js";
 import { registerConfigCheckoutRoutes } from "./modules/configcheckout/routes.js";
+import {
+  createChatsxRepository,
+  type ChatsxRepository,
+} from "./modules/chatsx/repository.js";
+import { registerChatsxRoutes } from "./modules/chatsx/routes.js";
 import {createTrackingRepository} from "./modules/tracking/repository.js";
 import type {TrackingRepository} from "./modules/tracking/repository.js";
 import {registerTrackingRoutes} from "./modules/tracking/routes.js";
@@ -38,6 +43,7 @@ type BuildAppOptions = {
   madameLunaRepository?: MadameLunaRepository;
   lastlinkRepository?: LastlinkRepository;
   configCheckoutRepository?: ConfigCheckoutRepository;
+  chatsxRepository?: ChatsxRepository;
   trackingRepository?: TrackingRepository;
 };
 
@@ -50,6 +56,7 @@ export function buildApp(options: BuildAppOptions = {}) {
           "req.headers.authorization",
           "req.headers.x-lastlink-token",
           "req.headers.x-configcheckout-token",
+          "req.headers.x-chatsx-token",
           "req.body",
         ],
         censor: "[REDACTED]",
@@ -83,6 +90,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   let madameLunaRepository = options.madameLunaRepository;
   let lastlinkRepository = options.lastlinkRepository;
   let configCheckoutRepository = options.configCheckoutRepository;
+  let chatsxRepository = options.chatsxRepository;
   let trackingRepository=options.trackingRepository;
 
   if (!lastlinkRepository && process.env.DATABASE_URL) {
@@ -100,6 +108,7 @@ export function buildApp(options: BuildAppOptions = {}) {
     madameLunaRepository = createMadameLunaRepository(database.db);
     lastlinkRepository = createLastlinkRepository(database.db);
     configCheckoutRepository = createConfigCheckoutRepository(database.db);
+    chatsxRepository = createChatsxRepository(database.db);
     trackingRepository=createTrackingRepository(database.pool);
     void registerEdgeRedirectRoutes(app,database.pool);
   }
@@ -118,6 +127,9 @@ export function buildApp(options: BuildAppOptions = {}) {
   }
   if (configCheckoutRepository) {
     void registerConfigCheckoutRoutes(app, configCheckoutRepository);
+  }
+  if (chatsxRepository) {
+    void registerChatsxRoutes(app, chatsxRepository);
   }
   if(trackingRepository)void registerTrackingRoutes(app,trackingRepository);
 

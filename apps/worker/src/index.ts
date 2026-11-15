@@ -3,6 +3,7 @@ import { createDatabase } from "@funil-metrics/database";
 import { PRODUCT_NAME } from "@funil-metrics/domain";
 import { processLastlinkBatch } from "./lastlink-processor.js";
 import { processConfigCheckoutBatch } from "./configcheckout-processor.js";
+import { processChatsxBatch } from "./chatsx-processor.js";
 import {processTictoBatch} from "./ticto-processor.js";
 import {processKiwifyBatch} from "./kiwify-processor.js";
 import {processMadameLunaBatch} from "./madame-luna-processor.js";
@@ -126,6 +127,16 @@ export async function runWorker(signal: AbortSignal) {
         if (configCheckoutResult.claimed > 0) {
           process.stdout.write(
             `${JSON.stringify({ event: "configcheckout_batch_processed", ...configCheckoutResult })}\n`,
+          );
+        }
+        const chatsxResult = await processChatsxBatch(
+          database.pool,
+          batchSize,
+          maxAttempts,
+        );
+        if (chatsxResult.claimed > 0) {
+          process.stdout.write(
+            `${JSON.stringify({ event: "chatsx_batch_processed", ...chatsxResult })}\n`,
           );
         }
         const tictoResult = await processTictoBatch(
